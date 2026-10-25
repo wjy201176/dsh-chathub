@@ -53,9 +53,6 @@ const DEFAULTS = {
   // turn is stored, and how often to check.
   historyCaptureMs: 180000,
   historyPollMs: 3000,
-  // Replay: the pause between successive prompts of a stored chat, so a
-  // provider does not merge two prompts into one answer.
-  replayGapMs: 12000,
 }
 
 function resolveConfig(config) {
@@ -188,7 +185,11 @@ export function apply(ctx, config) {
           return
         case '/history/open':
           if (methodRefused(req, res, ['POST'])) return
-          sendJson(res, 200, await controller.replayHistory((await readJsonBody(req))?.id ?? ''))
+          sendJson(res, 200, await controller.loadHistory((await readJsonBody(req))?.id ?? ''))
+          return
+        case '/history/exit':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await controller.exitHistory())
           return
         case '/history/view':
           if (methodRefused(req, res, ['POST'])) return
@@ -278,9 +279,14 @@ async function summarize(ctx, controller) {
     return { ok: false, error: 'the harness LLM service is unavailable' }
   }
 
-  const { answers, failed } = await controller.collectAnswers()
+  const { answers, failed, source } = await controller.collectAnswers()
   if (answers.length === 0) {
-    return { ok: false, error: 'no column has answered anything yet — send a prompt first' }
+    return {
+      ok: false,
+      error: source === 'history'
+        ? 'this chat has no stored answers to summarize'
+        : 'no column has answered anything yet — send a prompt first',
+    }
   }
 
   const prompt = controller.lastPrompt
@@ -307,6 +313,7 @@ async function summarize(ctx, controller) {
     failed,
     degraded: result.degraded === true,
     reason: result.reason ?? '',
+    source,
   })
   const opened = await controller.openReport(html)
   if (opened.ok !== true) return opened
@@ -322,6 +329,7 @@ async function summarize(ctx, controller) {
       parsed: result.digest.parsed,
       degraded: result.degraded === true,
       reason: result.reason ?? '',
+      source,
     },
   }
 }
