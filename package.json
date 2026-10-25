@@ -1,0 +1,40 @@
+{
+  "name": "dsh-chathub",
+  "version": "0.1.0",
+  "private": true,
+  "description": "chatHub — ask one prompt to ChatGPT, Gemini, Claude, DeepSeek and Grok side by side in a dedicated Edge window, with a shared prompt box, file attachment and voice input.",
+  "type": "module",
+  "main": "index.js",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib",
+    "ui",
+    "locale/*.json",
+    "cordis.patch.yml",
+    "icon.svg"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar",
+        "@deepseek-ai/dsh-client-ui-layout"
+      ]
+    }
+  }
+}

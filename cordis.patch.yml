@@ -1,0 +1,5 @@
+# chatHub bundle: inserts the Host row that owns the Edge window and its routes,
+# and the Client row that adds the sidebar button plus its main panel.
+- insert:
+    - id: chathub
+      name: dsh-chathub

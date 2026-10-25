@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>chatHub</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a21;
+    --panel-2: #1d222b;
+    --line: #262d38;
+    --text: #e6e9ef;
+    --muted: #8b95a5;
+    --accent: #4c8dff;
+    --ok: #3ecf8e;
+    --warn: #f5a524;
+    --bad: #f0616d;
+    --radius: 10px;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 "Segoe UI", system-ui, -apple-system, sans-serif;
+    overflow: hidden;
+  }
+  #app { display: flex; height: 100vh; width: 100vw; }
+
+  /* ---- left rail: 10% of the window width ---- */
+  #rail {
+    width: 10vw;
+    min-width: 148px;
+    max-width: 280px;
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 12px;
+    background: var(--panel);
+    border-right: 1px solid var(--line);
+    overflow-y: auto;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; font-weight: 600; letter-spacing: .2px; }
+  .brand svg { flex: none; }
+  .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
+  .rail-section { display: flex; flex-direction: column; gap: 6px; }
+  .rail-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .pane-list { display: flex; flex-direction: column; gap: 4px; }
+  .pane-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 8px; background: var(--panel-2);
+    border: 1px solid transparent; cursor: pointer; color: var(--text);
+    font: inherit; text-align: left; width: 100%;
+  }
+  .pane-chip:hover { border-color: var(--line); }
+  .pane-chip[data-active="true"] { border-color: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+  .dot[data-state="ready"] { background: var(--ok); }
+  .dot[data-state="login"] { background: var(--warn); }
+  .dot[data-state="error"] { background: var(--bad); }
+  .chip-meta { min-width: 0; }
+  .chip-meta b { display: block; font-weight: 500; font-size: 12px; }
+  .chip-meta span { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  button.action {
+    font: inherit; color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  button.action:hover { border-color: #3a4453; background: #222834; }
+  button.action.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.action.primary:hover { filter: brightness(1.08); }
+  button.action:disabled { opacity: .55; cursor: default; }
+
+  /* ---- history: newest first, with a timeline down the left ---- */
+  .history-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 6px; cursor: pointer; background: none; border: 0; padding: 0;
+    color: var(--muted); font: inherit; font-size: 11px;
+    text-transform: uppercase; letter-spacing: .6px;
+  }
+  .history-head:hover { color: var(--text); }
+  .history-head .caret { transition: transform .15s ease; }
+  .history-head[data-open="false"] .caret { transform: rotate(-90deg); }
+  .history-list { display: flex; flex-direction: column; gap: 0; position: relative; }
+  .history-list[hidden] { display: none; }
+  .history-empty { color: var(--muted); font-size: 11px; padding: 4px 2px; }
+  .history-group { position: relative; padding: 6px 0 2px; }
+  .history-group-label {
+    color: var(--muted); font-size: 10px; letter-spacing: .5px;
+    text-transform: uppercase; padding: 2px 0 4px 16px; position: relative;
+  }
+  /* The timeline: one continuous line through every group. */
+  .history-group-label::before {
+    content: ''; position: absolute; left: 3px; top: 6px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--muted); box-shadow: 0 0 0 2px var(--panel);
+  }
+  .history-group-label::after {
+    content: ''; position: absolute; left: 5px; top: 14px; bottom: -8px;
+    width: 1px; background: var(--line);
+  }
+  .history-group:last-child .history-group-label::after { display: none; }
+  .history-item {
+    display: block; width: 100%; text-align: left; font: inherit; cursor: pointer;
+    background: none; border: 0; border-radius: 6px; padding: 5px 6px 5px 16px;
+    color: var(--text); position: relative;
+  }
+  .history-item:hover { background: var(--panel-2); }
+  .history-item[data-active="true"] { background: var(--panel-2); box-shadow: inset 2px 0 0 var(--accent); }
+  .history-item .title {
+    font-size: 12px; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .history-item .meta { font-size: 10px; color: var(--muted); display: block; }
+  .history-item .del {
+    position: absolute; right: 2px; top: 50%; transform: translateY(-50%);
+    border: 0; background: none; color: var(--muted); cursor: pointer;
+    font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 4px; visibility: hidden;
+  }
+  .history-item:hover .del { visibility: visible; }
+  .history-item .del:hover { color: var(--bad); background: var(--panel); }
+  .history-item .view {
+    position: absolute; right: 20px; top: 50%; transform: translateY(-50%);
+    border: 0; background: none; color: var(--muted); cursor: pointer;
+    font-size: 12px; line-height: 1; padding: 2px 4px; border-radius: 4px; visibility: hidden;
+  }
+  .history-item:hover .view { visibility: visible; }
+  .history-item .view:hover { color: var(--accent); background: var(--panel); }
+  button.action:disabled { opacity: .5; cursor: default; }
+  .rail-foot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .status-line { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+  .status-line[data-tone="bad"] { color: var(--bad); }
+  .status-line[data-tone="ok"] { color: var(--ok); }
+
+  /* ---- right side ---- */
+  #right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  #grid { height: 90vh; flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1px; background: var(--line); }
+  .column { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
+  .column-head {
+    height: 34px; flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line);
+  }
+  .column-head b { font-weight: 600; font-size: 12px; }
+  .column-head .spacer { flex: 1; }
+  .column-head button { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
+  .column-head button:hover { color: var(--text); background: var(--panel-2); }
+  .column-body { position: relative; flex: 1; min-height: 0; background: #0b0d11; overflow: hidden; }
+  .column-body img { width: 100%; height: 100%; object-fit: fill; display: block; }
+  .column-body .placeholder {
+    position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px;
+    align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 16px;
+  }
+  .column-body[data-focus="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .signin-overlay {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font: inherit; font-size: 12px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+    background: var(--accent); border: 1px solid var(--accent); color: #fff;
+  }
+  .signin-overlay:hover { filter: brightness(1.08); }
+  .login-hint {
+    position: absolute; left: 8px; right: 8px; top: 8px;
+    font-size: 11px; color: var(--text); background: rgba(76,141,255,.92);
+    padding: 5px 8px; border-radius: 6px; text-align: center; pointer-events: none;
+  }
+  .focus-hint { position: absolute; left: 8px; bottom: 8px; font-size: 11px; color: var(--muted); background: rgba(15,17,21,.78); padding: 3px 7px; border-radius: 6px; pointer-events: none; }
+
+  /* ---- composer: 10% of the window height ---- */
+  #composer {
+    height: 10vh; flex: none; display: flex; flex-direction: column; gap: 6px;
+    padding: 8px 12px; background: var(--panel); border-top: 1px solid var(--line);
+  }
+  #prompt {
+    flex: 1; resize: none; width: 100%; min-height: 0;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 8px; padding: 7px 10px; font: inherit; outline: none;
+  }
+  #prompt:focus { border-color: var(--accent); }
+  .composer-bar { display: flex; align-items: center; gap: 8px; flex: none; }
+  .composer-bar .grow { flex: 1; }
+  .pill { color: var(--muted); font-size: 11px; }
+  .pill[data-tone="ok"] { color: var(--ok); }
+  .pill[data-tone="bad"] { color: var(--bad); }
+  .attachments { display: flex; gap: 6px; flex-wrap: wrap; max-height: 22px; overflow: hidden; }
+  .attachment { font-size: 11px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
+  .recording { animation: pulse 1.1s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="rail">
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2.5" y="4" width="19" height="14" rx="2.5"></rect>
+        <path d="M7 18.5v2.2L10.6 18.5"></path>
+        <path d="M8 8.5h8M8 12h5.5"></path>
+      </svg>
+      <span>chatHub<small>one prompt · every model</small></span>
+    </div>
+
+    <div class="rail-section">
+      <button class="action primary" id="btn-new-session" title="Clear every column and start a fresh chat">＋ New Session</button>
+    </div>
+
+    <div class="rail-section">
+      <button class="history-head" id="history-toggle" data-open="true" aria-expanded="true">
+        <span>History</span>
+        <span class="caret">▾</span>
+      </button>
+      <div class="history-list" id="history-list"></div>
+    </div>
+
+    <div class="rail-section">
+      <div class="rail-title">Model columns</div>
+      <div class="pane-list" id="pane-list"></div>
+    </div>
+
+    <div class="rail-section">
+      <div class="rail-title">Session</div>
+      <button class="action" id="btn-reload">Reload all columns</button>
+      <button class="action" id="btn-cookies">Import Edge cookies</button>
+      <button class="action" id="btn-close">Close window</button>
+    </div>
+
+    <div class="rail-foot">
+      <div class="status-line" id="status">Connecting…</div>
+    </div>
+  </aside>
+
+  <main id="right">
+    <div id="grid"></div>
+    <div id="composer">
+      <div class="attachments" id="attachments"></div>
+      <textarea id="prompt" placeholder="Type one prompt for every model…  (Enter sends, Shift+Enter newline)"></textarea>
+      <div class="composer-bar">
+        <input type="file" id="file" multiple hidden>
+        <button class="action" id="btn-attach" title="Attach file">📎 Attach</button>
+        <button class="action" id="btn-voice" title="Voice input">🎙 Voice</button>
+        <span class="pill" id="hint"></span>
+        <span class="grow"></span>
+        <span class="pill" id="send-state"></span>
+        <button class="action primary" id="btn-send">Send to all</button>
+        <button class="action" id="btn-summarize" title="Summarize what the models agreed on and where they differ">Summarize</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(() => {
+  'use strict'
+
+  const PANES = [
+    { id: 'chatgpt', title: 'ChatGPT' },
+    { id: 'gemini', title: 'Gemini' },
+    { id: 'claude', title: 'Claude' },
+    { id: 'deepseek', title: 'DeepSeek' },
+    { id: 'grok', title: 'Grok' },
+  ]
+  const FRAME_W = 520
+  const FRAME_H = 1180
+
+  // The chatHub window is its own browser profile, so it has no DSH session
+  // cookie. The Host put a random per-launch token in this page's URL; every
+  // API call echoes it back so the Host can authenticate the window.
+  const TOKEN = new URLSearchParams(location.search).get('t') ?? ''
+  const withToken = (path) => (TOKEN === '' ? `api/${path}` : `api/${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(TOKEN)}`)
+  const authHeaders = TOKEN === '' ? {} : { 'x-chathub-token': TOKEN }
+  const api = (path, init) => fetch(withToken(path), { cache: 'no-store', ...init, headers: { ...authHeaders, ...(init?.headers ?? {}) } })
+
+  const state = {
+    panes: new Map(PANES.map((p) => [p.id, { ...p, status: null, etag: '', url: '', focused: false }])),
+    activePane: PANES[0].id,
+    attachments: [],
+    sending: false,
+    summarizing: false,
+    startingSession: false,
+    /** Stored chats, newest first, as the Host reports them. */
+    history: [],
+    activeHistoryId: null,
+    replaying: false,
+    /** While in the future, the status line shows an action message, not the poll. */
+    statusHoldUntil: 0,
+    voice: null,
+  }
+
+  // ---------- rail ----------
+  const paneList = document.getElementById('pane-list')
+  const statusEl = document.getElementById('status')
+
+  function status(text, tone) {
+    statusEl.textContent = text
+    statusEl.dataset.tone = tone ?? ''
+    // A message from an ACTION outlives the next few status polls: the poll runs
+    // every 4s and would otherwise erase "chat deleted" or "opened …" before the
+    // reader can see it.
+    state.statusHoldUntil = text === '' ? 0 : Date.now() + 6000
+  }
+
+  /** The connection line, only when no action message is still on screen. */
+  function statusAmbient(text, tone) {
+    if (Date.now() < (state.statusHoldUntil ?? 0)) return
+    statusEl.textContent = text
+    statusEl.dataset.tone = tone ?? ''
+  }
+
+  function renderRail() {
+    paneList.textContent = ''
+    for (const pane of state.panes.values()) {
+      const chip = document.createElement('button')
+      chip.className = 'pane-chip'
+      chip.dataset.active = String(state.activePane === pane.id)
+      chip.title = pane.status?.href ?? pane.title
+
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      dot.dataset.state = paneState(pane)
+
+      const meta = document.createElement('span')
+      meta.className = 'chip-meta'
+      const name = document.createElement('b')
+      name.textContent = pane.title
+      const sub = document.createElement('span')
+      sub.textContent = paneSubtitle(pane)
+      meta.append(name, sub)
+
+      chip.append(dot, meta)
+      chip.addEventListener('click', () => focusPane(pane.id))
+      paneList.append(chip)
+    }
+  }
+
+  function paneState(pane) {
+    if (pane.status?.loginRequired === true) return 'login'
+    if (pane.status?.ready === true) return 'ready'
+    if (pane.status === null) return 'idle'
+    return 'error'
+  }
+
+  function paneSubtitle(pane) {
+    if (pane.status?.loginRequired === true) return 'sign in'
+    if (pane.status?.ready === true) return 'ready'
+    if (pane.status === null) return 'loading…'
+    return 'waiting for composer'
+  }
+
+  // ---------- history ----------
+  const historyList = document.getElementById('history-list')
+  const historyToggle = document.getElementById('history-toggle')
+
+  /** "Today" / "Yesterday" / "12 Oct 2026" — the timeline's group labels. */
+  function dayLabel(ms) {
+    const date = new Date(ms)
+    const midnight = new Date()
+    midnight.setHours(0, 0, 0, 0)
+    const today = midnight.getTime()
+    const day = new Date(date)
+    day.setHours(0, 0, 0, 0)
+    const diffDays = Math.round((today - day.getTime()) / 86400000)
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+  }
+
+  /** "14:32" — the time shown under each entry. */
+  function timeLabel(ms) {
+    return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  }
+
+  function renderHistory() {
+    historyList.textContent = ''
+    const entries = state.history
+    if (entries.length === 0) {
+      const empty = document.createElement('div')
+      empty.className = 'history-empty'
+      empty.textContent = 'No chats yet — send a prompt to start one.'
+      historyList.append(empty)
+      return
+    }
+    let currentGroup = null
+    for (const entry of entries) {
+      const group = dayLabel(entry.updatedAt ?? entry.createdAt ?? Date.now())
+      if (group !== currentGroup) {
+        currentGroup = group
+        const header = document.createElement('div')
+        header.className = 'history-group-label'
+        header.textContent = group
+        historyList.append(header)
+      }
+
+      const item = document.createElement('button')
+      item.className = 'history-item'
+      item.dataset.active = String(state.activeHistoryId === entry.id)
+      item.title = entry.title === '' ? '(untitled)' : entry.title
+
+      const title = document.createElement('span')
+      title.className = 'title'
+      title.textContent = entry.title === '' ? '(untitled)' : entry.title
+
+      const meta = document.createElement('span')
+      meta.className = 'meta'
+      const turns = Array.isArray(entry.turns) ? entry.turns.length : 0
+      meta.textContent = `${timeLabel(entry.updatedAt ?? entry.createdAt ?? Date.now())} · ${turns} ${turns === 1 ? 'prompt' : 'prompts'}`
+
+      const del = document.createElement('button')
+      del.className = 'del'
+      del.textContent = '×'
+      del.title = 'Delete this chat'
+      del.addEventListener('click', (event) => {
+        event.stopPropagation()
+        void deleteHistory(entry.id)
+      })
+
+      // A separate control for reading the stored transcript, so the row itself
+      // stays the "replay into the columns" action the user expects.
+      const view = document.createElement('button')
+      view.className = 'view'
+      view.textContent = '⤢'
+      view.title = 'Open a read-only transcript'
+      view.addEventListener('click', (event) => {
+        event.stopPropagation()
+        void viewHistory(entry.id)
+      })
+
+      item.append(title, meta, view, del)
+      item.title = `${entry.title === '' ? '(untitled)' : entry.title}\nClick to replay this chat into all columns`
+      item.addEventListener('click', () => { void openHistory(entry.id) })
+      historyList.append(item)
+    }
+  }
+
+  async function refreshHistory() {
+    try {
+      const response = await api('history?limit=200')
+      const payload = await response.json()
+      if (payload.ok !== true) return
+      state.history = Array.isArray(payload.value?.entries) ? payload.value.entries : []
+      renderHistory()
+    } catch {
+      /* transient: the next poll retries */
+    }
+  }
+
+  async function deleteHistory(id) {
+    const response = await api('history/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => null)
+    const payload = response === null ? null : await response.json().catch(() => null)
+    if (payload?.ok === true) {
+      if (state.activeHistoryId === id) state.activeHistoryId = null
+      status('chat deleted', 'ok')
+      await refreshHistory()
+    } else {
+      status(payload?.error ?? 'could not delete that chat', 'bad')
+    }
+  }
+
+  /**
+   * Replay a stored chat into the live columns.
+   *
+   * Clicking an entry restores that conversation by sending its prompts to the
+   * models again — the columns are the providers' own apps, so a past chat
+   * cannot be re-opened there, and "restoring" it means continuing it.
+   */
+  async function openHistory(id) {
+    const entry = state.history.find((candidate) => candidate.id === id)
+    const turns = Array.isArray(entry?.turns) ? entry.turns.length : 0
+    if (turns === 0) {
+      status('that chat has no prompts to replay', 'bad')
+      return
+    }
+    if (state.replaying) {
+      status('a chat is already being replayed…', 'bad')
+      return
+    }
+    state.replaying = true
+    state.activeHistoryId = id
+    renderHistory()
+    status(`replaying ${turns} ${turns === 1 ? 'prompt' : 'prompts'} into every column…`)
+    try {
+      const response = await api('history/open', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const payload = await response.json()
+      if (payload.ok !== true) {
+        status(payload.error ?? 'could not replay that chat', 'bad')
+        return
+      }
+      const value = payload.value
+      status(`replayed ${value.turns} ${value.turns === 1 ? 'prompt' : 'prompts'} · ${value.delivered} sends accepted`, 'ok')
+      void refreshState()
+    } catch (error) {
+      status(String(error.message ?? error), 'bad')
+    } finally {
+      state.replaying = false
+    }
+  }
+
+  /** Open a read-only transcript of a stored chat in its own window. */
+  async function viewHistory(id) {
+    const opened = await api('history/view', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => null)
+    const result = opened === null ? null : await opened.json().catch(() => null)
+    if (result?.ok === true) status('opened the transcript in its own window', 'ok')
+    else status(result?.error ?? 'could not open that chat', 'bad')
+  }
+
+  historyToggle.addEventListener('click', () => {
+    const open = historyToggle.dataset.open !== 'false'
+    historyToggle.dataset.open = String(!open)
+    historyToggle.setAttribute('aria-expanded', String(!open))
+    historyList.hidden = open
+  })
+
+  // ---------- new session ----------
+  const newSessionButton = document.getElementById('btn-new-session')
+  newSessionButton.addEventListener('click', async () => {
+    if (state.startingSession) return
+    state.startingSession = true
+    newSessionButton.disabled = true
+    status('starting a new session in every column…')
+    try {
+      const response = await api('session/new', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      const payload = await response.json()
+      if (payload.ok !== true) {
+        status(payload.error ?? 'could not start a new session', 'bad')
+        return
+      }
+      const failed = Object.entries(payload.value.results).filter(([, value]) => value.ok !== true)
+      status(
+        failed.length === 0
+          ? 'every column is on a fresh chat'
+          : `${state.panes.size - failed.length}/${state.panes.size} cleared · ${failed.map(([id]) => id).join(', ')} failed`,
+        failed.length === 0 ? 'ok' : 'bad',
+      )
+      state.activeHistoryId = null
+      await refreshHistory()
+      void refreshState()
+    } catch (error) {
+      status(String(error.message ?? error), 'bad')
+    } finally {
+      state.startingSession = false
+      newSessionButton.disabled = false
+    }
+  })
+
+  // ---------- grid ----------
+  const grid = document.getElementById('grid')
+  const columnRefs = new Map()
+
+  function renderGrid() {
+    grid.textContent = ''
+    for (const pane of state.panes.values()) {
+      const column = document.createElement('section')
+      column.className = 'column'
+
+      const head = document.createElement('div')
+      head.className = 'column-head'
+      const dot = document.createElement('span')
+      dot.className = 'dot'
+      const title = document.createElement('b')
+      title.textContent = pane.title
+      const spacer = document.createElement('span')
+      spacer.className = 'spacer'
+      const reload = document.createElement('button')
+      reload.textContent = 'reload'
+      reload.title = `Reload ${pane.title}`
+      reload.addEventListener('click', () => reloadPane(pane.id))
+      head.append(dot, title, spacer, reload)
+
+      const body = document.createElement('div')
+      body.className = 'column-body'
+      body.tabIndex = 0
+      body.dataset.focus = 'false'
+      const img = document.createElement('img')
+      img.alt = `${pane.title} live view`
+      img.draggable = false
+      const placeholder = document.createElement('div')
+      placeholder.className = 'placeholder'
+      placeholder.innerHTML = `<div>${pane.title}</div><div style="font-size:11px">loading the column…</div>`
+      const signIn = document.createElement('button')
+      signIn.className = 'signin-overlay'
+      signIn.type = 'button'
+      signIn.hidden = true
+      signIn.textContent = `Sign in to ${pane.title}`
+      signIn.addEventListener('click', () => startLogin(pane))
+      const loginHint = document.createElement('div')
+      loginHint.className = 'login-hint'
+      loginHint.hidden = true
+      const hint = document.createElement('div')
+      hint.className = 'focus-hint'
+      hint.textContent = 'click to interact'
+      body.append(img, placeholder, signIn, loginHint, hint)
+
+      column.append(head, body)
+      grid.append(column)
+      columnRefs.set(pane.id, { column, head, body, img, placeholder, dot, signIn, loginHint })
+
+      wirePointer(pane, body, img)
+      wireKeyboard(pane, body)
+    }
+  }
+
+  function updateColumn(pane) {
+    const refs = columnRefs.get(pane.id)
+    if (!refs) return
+    refs.dot.dataset.state = paneState(pane)
+    refs.body.dataset.focus = String(state.activePane === pane.id)
+    const hasFrame = typeof pane.url === 'string' && pane.url !== ''
+    refs.img.style.visibility = hasFrame ? 'visible' : 'hidden'
+    refs.placeholder.style.display = hasFrame ? 'none' : 'flex'
+    refs.signIn.hidden = pane.status?.loginRequired !== true || pane.signingIn === true
+    if (pane.signingIn === true) refs.signIn.textContent = 'Opening sign-in…'
+    else refs.signIn.textContent = `Sign in to ${pane.title}`
+    refs.loginHint.hidden = !pane.loginHint
+    refs.loginHint.textContent = pane.loginHint ?? ''
+  }
+
+  /**
+   * Start a sign-in inside the column itself.
+   *
+   * Signing in here (not in an external browser) is what makes the session
+   * persist: the cookies and chat history are written to chatHub's own Edge
+   * profile, which survives restarts. The Host also picks the provider's
+   * preferred method — for Claude that is "Continue with email", never Apple.
+   */
+  async function startLogin(pane) {
+    pane.signingIn = true
+    updateColumn(pane)
+    const payload = await api('login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pane: pane.id }),
+    }).catch(() => null)
+    pane.signingIn = false
+    const value = payload?.ok === true ? payload.value : null
+    pane.loginHint = value?.awaitingInput === true
+      ? `Enter your ${pane.title} email in the column above — this login is saved`
+      : `Sign in to ${pane.title} in the column above — this login is saved`
+    updateColumn(pane)
+    void refreshState()
+  }
+
+  function focusPane(id) {
+    state.activePane = id
+    for (const pane of state.panes.values()) updateColumn(pane)
+    renderRail()
+    columnRefs.get(id)?.body.focus()
+  }
+
+  // ---------- pointer forwarding ----------
+  function wirePointer(pane, body, img) {
+    const scale = () => {
+      const rect = img.getBoundingClientRect()
+      return {
+        x: FRAME_W / Math.max(1, rect.width),
+        y: FRAME_H / Math.max(1, rect.height),
+        left: rect.left,
+        top: rect.top,
+      }
+    }
+    const point = (event) => {
+      const s = scale()
+      return {
+        x: Math.round((event.clientX - s.left) * s.x),
+        y: Math.round((event.clientY - s.top) * s.y),
+      }
+    }
+    let dragging = false
+    body.addEventListener('mousedown', (event) => {
+      event.preventDefault()
+      focusPane(pane.id)
+      dragging = true
+      const { x, y } = point(event)
+      sendInput(pane.id, { kind: 'mouse', type: 'mousePressed', x, y, button: event.button === 2 ? 'right' : 'left', clickCount: 1 })
+    })
+    body.addEventListener('mousemove', (event) => {
+      if (!dragging) return
+      const { x, y } = point(event)
+      sendInput(pane.id, { kind: 'mouse', type: 'mouseMoved', x, y })
+    })
+    window.addEventListener('mouseup', (event) => {
+      if (!dragging) return
+      dragging = false
+      const { x, y } = point(event)
+      sendInput(pane.id, { kind: 'mouse', type: 'mouseReleased', x, y, button: event.button === 2 ? 'right' : 'left', clickCount: 1 })
+    })
+    body.addEventListener('wheel', (event) => {
+      event.preventDefault()
+      const { x, y } = point(event)
+      sendInput(pane.id, { kind: 'mouse', type: 'mouseWheel', x, y, deltaX: event.deltaX, deltaY: event.deltaY })
+    }, { passive: false })
+    body.addEventListener('contextmenu', (event) => event.preventDefault())
+  }
+
+  // ---------- keyboard forwarding ----------
+  const SPECIAL = new Set(['Backspace', 'Enter', 'Tab', 'Escape', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Delete'])
+
+  function wireKeyboard(pane, body) {
+    body.addEventListener('keydown', (event) => {
+      if (event.key === 'F5') return
+      if (event.ctrlKey || event.metaKey || event.altKey) {
+        sendInput(pane.id, {
+          kind: 'key',
+          type: 'rawKeyDown',
+          key: event.key,
+          code: event.code,
+          windowsVirtualKeyCode: event.keyCode,
+          modifiers: modifiersOf(event),
+        })
+        return
+      }
+      if (SPECIAL.has(event.key)) {
+        event.preventDefault()
+        sendInput(pane.id, {
+          kind: 'key',
+          type: 'keyDown',
+          key: event.key,
+          code: event.code,
+          windowsVirtualKeyCode: event.keyCode,
+        })
+        sendInput(pane.id, {
+          kind: 'key',
+          type: 'keyUp',
+          key: event.key,
+          code: event.code,
+          windowsVirtualKeyCode: event.keyCode,
+        })
+        return
+      }
+      if (event.key.length === 1) {
+        event.preventDefault()
+        sendInput(pane.id, { kind: 'text', text: event.key })
+      }
+    })
+  }
+
+  function modifiersOf(event) {
+    return (event.altKey ? 1 : 0) | (event.ctrlKey ? 2 : 0) | (event.metaKey ? 4 : 0) | (event.shiftKey ? 8 : 0)
+  }
+
+  function sendInput(pane, payload) {
+    api('input', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pane, event: payload }),
+    }).catch(() => {})
+  }
+
+  // ---------- live frames ----------
+  const FRAME_INTERVAL = 320
+  const FRAME_TIMEOUT_MS = 4000
+  let frameTimer = null
+  let frameBusy = false
+  let frameBusySince = 0
+
+  /** fetch() with a deadline: a stalled request must never wedge the loop. */
+  function fetchWithTimeout(url, ms) {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), ms)
+    return fetch(url, { cache: 'no-store', signal: controller.signal }).finally(() => clearTimeout(timer))
+  }
+
+  async function pumpFrames() {
+    // Self-heal: a previous tick that never settled must not stop the stream.
+    if (frameBusy && Date.now() - frameBusySince < FRAME_TIMEOUT_MS) return
+    frameBusy = true
+    frameBusySince = Date.now()
+    try {
+      for (const pane of state.panes.values()) {
+        let response
+        try {
+          response = await fetchWithTimeout(withToken(`frame?pane=${encodeURIComponent(pane.id)}&etag=${encodeURIComponent(pane.etag)}`), FRAME_TIMEOUT_MS)
+        } catch {
+          continue
+        }
+        if (response.status === 304) continue
+        if (!response.ok) continue
+        const etag = response.headers.get('etag') ?? ''
+        const blob = await response.blob()
+        if (blob.size === 0) continue
+        const nextUrl = URL.createObjectURL(blob)
+        const refs = columnRefs.get(pane.id)
+        if (refs) {
+          refs.img.src = nextUrl
+          refs.img.style.visibility = 'visible'
+          refs.placeholder.style.display = 'none'
+        }
+        // Release the previous object URL only after the new one is attached, so
+        // the <img> never points at a revoked blob.
+        const previous = pane.url
+        pane.url = nextUrl
+        pane.etag = etag
+        if (typeof previous === 'string' && previous !== '') URL.revokeObjectURL(previous)
+      }
+    } catch {
+      /* transient: the next tick retries */
+    } finally {
+      frameBusy = false
+    }
+  }
+
+  function startFrames() {
+    if (frameTimer !== null) return
+    frameTimer = setInterval(() => { void pumpFrames() }, FRAME_INTERVAL)
+    void pumpFrames()
+  }
+
+  // ---------- status polling ----------
+  async function refreshState() {
+    try {
+      const response = await api('state')
+      const payload = await response.json()
+      if (payload.ok !== true) {
+        status(payload.error ?? 'state unavailable', 'bad')
+        return
+      }
+      const value = payload.value
+      if (value.running !== true) {
+        statusAmbient(value.error ?? 'Edge window is not running', 'bad')
+      } else {
+        statusAmbient(`Edge window is open · port ${value.port}`, 'ok')
+      }
+      for (const pane of state.panes.values()) {
+        const remote = value.panes.find((candidate) => candidate.id === pane.id)
+        if (remote === undefined) continue
+        pane.remoteTargetId = remote.targetId
+        pane.status = {
+          ready: remote.ready === true,
+          loginRequired: remote.loginRequired === true,
+          href: remote.pageUrl ?? '',
+          title: remote.pageTitle ?? '',
+        }
+        updateColumn(pane)
+      }
+      renderRail()
+    } catch (error) {
+      status(`host unreachable: ${String(error.message ?? error)}`, 'bad')
+    }
+  }
+
+  // ---------- prompt submission ----------
+  const promptEl = document.getElementById('prompt')
+  const sendStateEl = document.getElementById('send-state')
+  const hintEl = document.getElementById('hint')
+  const attachmentsEl = document.getElementById('attachments')
+  const sendButton = document.getElementById('btn-send')
+
+  function renderAttachments() {
+    attachmentsEl.textContent = ''
+    for (const file of state.attachments) {
+      const pill = document.createElement('span')
+      pill.className = 'attachment'
+      pill.textContent = file.name
+      attachmentsEl.append(pill)
+    }
+  }
+
+  async function submitPrompt() {
+    const text = promptEl.value.trim()
+    if (text === '' || state.sending) return
+    state.sending = true
+    sendButton.disabled = true
+    sendStateEl.textContent = 'sending…'
+    sendStateEl.dataset.tone = ''
+    try {
+      if (state.attachments.length > 0) await uploadAttachments()
+      const response = await api('prompt', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      const payload = await response.json()
+      if (payload.ok !== true) {
+        sendStateEl.textContent = payload.error ?? 'failed'
+        sendStateEl.dataset.tone = 'bad'
+        return
+      }
+      const failed = Object.entries(payload.value.results).filter(([, value]) => value.ok !== true)
+      // Count from the actual pane list so adding a column never needs a literal.
+      const total = state.panes.size
+      if (failed.length === 0) {
+        sendStateEl.textContent = `sent to all ${total}`
+        sendStateEl.dataset.tone = 'ok'
+        promptEl.value = ''
+        state.attachments = []
+        renderAttachments()
+      } else {
+        sendStateEl.textContent = `sent to ${total - failed.length}/${total} · ${failed.map(([id]) => id).join(', ')} not ready`
+        sendStateEl.dataset.tone = 'bad'
+      }
+    } catch (error) {
+      sendStateEl.textContent = String(error.message ?? error)
+      sendStateEl.dataset.tone = 'bad'
+    } finally {
+      state.sending = false
+      sendButton.disabled = false
+    }
+  }
+
+  async function uploadAttachments() {
+    for (const file of state.attachments) {
+      await fetch(withToken('attach'), {
+        method: 'POST',
+        headers: { ...authHeaders, 'content-type': file.type || 'application/octet-stream', 'x-file-name': encodeURIComponent(file.name) },
+        body: file,
+      })
+    }
+  }
+
+  // ---------- voice input ----------
+  function startVoice() {
+    const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
+    if (!Recognition) {
+      hintEl.textContent = 'voice input is unavailable in this browser'
+      hintEl.dataset.tone = 'bad'
+      return
+    }
+    if (state.voice !== null) {
+      state.voice.stop()
+      state.voice = null
+      return
+    }
+    const recognition = new Recognition()
+    recognition.lang = navigator.language || 'en-US'
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.onresult = (event) => {
+      let transcript = ''
+      for (const result of event.results) transcript += result[0].transcript
+      promptEl.value = transcript
+      hintEl.textContent = 'listening…'
+      hintEl.dataset.tone = 'ok'
+    }
+    recognition.onerror = (event) => {
+      hintEl.textContent = `voice input failed: ${event.error}`
+      hintEl.dataset.tone = 'bad'
+      state.voice = null
+      document.getElementById('btn-voice').classList.remove('recording')
+    }
+    recognition.onend = () => {
+      hintEl.textContent = ''
+      hintEl.dataset.tone = ''
+      state.voice = null
+      document.getElementById('btn-voice').classList.remove('recording')
+    }
+    state.voice = recognition
+    document.getElementById('btn-voice').classList.add('recording')
+    recognition.start()
+  }
+
+  // ---------- wiring ----------
+  document.getElementById('btn-send').addEventListener('click', () => { void submitPrompt() })
+  promptEl.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
+      event.preventDefault()
+      void submitPrompt()
+    }
+  })
+  document.getElementById('btn-attach').addEventListener('click', () => document.getElementById('file').click())
+  document.getElementById('file').addEventListener('change', (event) => {
+    state.attachments = [...(event.target.files ?? [])]
+    renderAttachments()
+  })
+  document.getElementById('btn-voice').addEventListener('click', () => startVoice())
+
+  // Summarize: the Host reads every column, asks the model for one consensus +
+  // differences digest, and opens the report in its own Edge window.
+  const summarizeButton = document.getElementById('btn-summarize')
+  summarizeButton.addEventListener('click', async () => {
+    if (state.summarizing) return
+    state.summarizing = true
+    summarizeButton.disabled = true
+    sendStateEl.textContent = 'summarizing… (this reads all columns and asks a model)'
+    sendStateEl.dataset.tone = ''
+    try {
+      const response = await api('summarize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      })
+      const payload = await response.json()
+      if (payload.ok !== true) {
+        sendStateEl.textContent = payload.error ?? 'summary failed'
+        sendStateEl.dataset.tone = 'bad'
+        return
+      }
+      const value = payload.value
+      sendStateEl.textContent = `summary opened · ${value.answers} columns compared, ${value.differences} differences`
+      sendStateEl.dataset.tone = 'ok'
+    } catch (error) {
+      sendStateEl.textContent = String(error.message ?? error)
+      sendStateEl.dataset.tone = 'bad'
+    } finally {
+      state.summarizing = false
+      summarizeButton.disabled = false
+    }
+  })
+
+  document.getElementById('btn-reload').addEventListener('click', async () => {
+    await api('reload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    status('reloading all columns…')
+    void refreshState()
+  })
+  document.getElementById('btn-close').addEventListener('click', async () => {
+    status('closing the window…')
+    await api('close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {})
+    window.close()
+  })
+  document.getElementById('btn-cookies').addEventListener('click', async () => {
+    status('importing Edge cookies…')
+    const response = await api('cookies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
+    const payload = await response.json()
+    if (payload.ok === true) {
+      status(`imported ${payload.value.applied} cookies for ${payload.value.sites ?? ''} sites`.trim(), 'ok')
+    } else if (payload.error === 'cookies-locked') {
+      // Edge holds its cookie database open while it runs, so this is expected
+      // whenever the user's own Edge is open — not a failure worth alarming over.
+      status('Edge is open, so its cookies are locked. Close Edge and try again, or sign in inside the columns (those logins are saved).', 'bad')
+    } else if (payload.error === 'cookies-empty') {
+      status('no signed-in provider cookies found in Edge — sign in inside the columns instead', 'bad')
+    } else {
+      status(payload.error ?? 'cookie import failed', 'bad')
+    }
+  })
+
+  async function reloadPane(id) {
+    await api('reload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ panes: [id] }) }).catch(() => {})
+  }
+
+  // ---------- boot ----------
+  renderRail()
+  renderGrid()
+  for (const pane of state.panes.values()) updateColumn(pane)
+  focusPane(state.activePane)
+  void refreshState()
+  void refreshHistory()
+  setInterval(() => { void refreshState() }, 4000)
+  // The history changes when a prompt is sent or a column finishes answering,
+  // so it polls a little slower than the pane status.
+  setInterval(() => { void refreshHistory() }, 8000)
+  startFrames()
+})()
+</script>
+</body>
+</html>

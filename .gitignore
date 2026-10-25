@@ -1,0 +1,8 @@
+﻿# Dependencies
+node_modules/
+
+# chatHub runtime data — these hold live provider sessions, cookies and the
+# local chat history. They must never be published.
+*.log
+.DS_Store
+Thumbs.db
