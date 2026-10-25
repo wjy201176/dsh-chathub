@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules/
 
 # chatHub runtime data — these hold live provider sessions, cookies and the
