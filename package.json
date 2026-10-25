@@ -1,6 +1,6 @@
 {
   "name": "dsh-chathub",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "chatHub — ask one prompt to ChatGPT, Gemini, Claude, DeepSeek and Grok side by side in a dedicated Edge window, with a shared prompt box, file attachment and voice input.",
   "type": "module",
