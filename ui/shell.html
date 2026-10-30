@@ -136,7 +136,9 @@
 
   /* ---- right side ---- */
   #right { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  #grid { height: 90vh; flex: none; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1px; background: var(--line); }
+  /* The columns take what is left after the composer and the timeline, so a
+     collapsed timeline gives the height straight back to the columns. */
+  #grid { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1px; background: var(--line); }
   .column { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
   .column-head {
     height: 34px; flex: none; display: flex; align-items: center; gap: 8px;
@@ -215,6 +217,75 @@
   .attachment { font-size: 11px; color: var(--muted); background: var(--panel-2); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; }
   .recording { animation: pulse 1.1s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .45 } }
+
+  /* ---- summaries timeline: a strip under the composer ---- */
+  #timeline {
+    flex: none; display: flex; flex-direction: column;
+    max-height: 30vh; background: var(--panel); border-top: 1px solid var(--line);
+  }
+  #timeline[data-collapsed="true"] .timeline { display: none; }
+  #timeline-head {
+    flex: none; display: flex; align-items: center; gap: 8px;
+    padding: 5px 12px; border-bottom: 1px solid var(--line);
+  }
+  .timeline-title { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+  .timeline-count { font-size: 11px; color: var(--muted); }
+  .timeline-count:empty { display: none; }
+  .timeline-toggle {
+    font: inherit; font-size: 11px; line-height: 1; color: var(--muted);
+    background: none; border: 0; cursor: pointer; padding: 2px 5px; border-radius: 4px;
+  }
+  .timeline-toggle:hover { color: var(--text); background: var(--panel-2); }
+  #timeline[data-collapsed="true"] .timeline-toggle { transform: rotate(-90deg); }
+
+  /* A vertical rule with a dot per entry, the same shape the Daily News Digest
+     timeline uses: the line stays reachable however long the list grows. */
+  .timeline { flex: 1; min-height: 0; overflow-y: auto; margin: 0; padding: 4px 12px 8px; list-style: none; }
+  .timeline-item { position: relative; display: flex; align-items: center; gap: 8px; padding-left: 18px; min-height: 34px; }
+  .timeline-item::before {
+    content: ''; position: absolute; left: 5px; top: 0; bottom: 0; width: 1px; background: var(--line);
+  }
+  .timeline-item:first-child::before { top: 50%; }
+  .timeline-item:last-child::before { bottom: 50%; }
+  .timeline-dot {
+    position: absolute; left: 2px; top: 50%; transform: translateY(-50%);
+    width: 7px; height: 7px; border-radius: 50%; background: var(--line); z-index: 1;
+  }
+  .timeline-item[data-active="true"] .timeline-dot { background: var(--accent); }
+  /* The tag: a few words naming the topic, sitting at the left of the row.
+     It is a button so it stays a chip until clicked, then becomes an input —
+     the label is the user's, so editing it is a first-class action. */
+  .timeline-tag {
+    flex: none; max-width: 190px; font: inherit; font-size: 11px; font-weight: 600;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--line);
+    background: var(--panel-2); color: var(--text); cursor: text;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .timeline-tag:hover { border-color: var(--accent); color: var(--accent); }
+  .timeline-tag[data-edited="true"] { border-style: dashed; }
+  .timeline-tag[data-empty="true"] { color: var(--muted); font-weight: 500; border-style: dashed; }
+  .timeline-tag-input {
+    flex: none; width: 190px; font: inherit; font-size: 11px; font-weight: 600;
+    padding: 2px 9px; border-radius: 999px; border: 1px solid var(--accent);
+    background: var(--panel); color: var(--text); outline: none;
+  }
+  .timeline-open {
+    flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+    text-align: left; font: inherit; font-size: 12px; padding: 5px 9px;
+    border-radius: 8px; border: 1px solid transparent; background: none;
+    color: var(--text); cursor: pointer;
+  }
+  .timeline-open:hover { background: var(--panel-2); border-color: var(--line); }
+  .timeline-item[data-active="true"] .timeline-open { border-color: var(--line); background: var(--panel-2); }
+  .timeline-when { color: var(--text); font-weight: 500; white-space: nowrap; }
+  .timeline-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .timeline-meta { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .timeline-empty { color: var(--muted); font-size: 11px; padding: 6px 2px; }
+  .timeline-del {
+    flex: none; font: inherit; font-size: 13px; line-height: 1; color: var(--muted);
+    background: none; border: 0; cursor: pointer; padding: 3px 6px; border-radius: 5px;
+  }
+  .timeline-del:hover { color: var(--bad); background: var(--panel-2); }
 </style>
 </head>
 <body>
@@ -279,6 +350,18 @@
         <button class="action" id="btn-summarize" title="Summarize what the models agreed on and where they differ">Summarize</button>
       </div>
     </div>
+
+    <!-- Saved summaries: a timeline under the columns, so a report is one click
+         away without leaving the window. -->
+    <section id="timeline">
+      <header id="timeline-head">
+        <span class="timeline-title">Summaries</span>
+        <span class="timeline-count" id="timeline-count"></span>
+        <span class="grow"></span>
+        <button class="timeline-toggle" id="timeline-toggle" aria-expanded="true" title="Collapse the timeline">▾</button>
+      </header>
+      <ol class="timeline" id="summaries-list"></ol>
+    </section>
   </main>
 </div>
 
@@ -315,6 +398,9 @@
     history: [],
     activeHistoryId: null,
     viewingHistory: false,
+    /** Saved summaries, newest first. */
+    summaries: [],
+    activeSummaryId: null,
     /** While in the future, the status line shows an action message, not the poll. */
     statusHoldUntil: 0,
     voice: null,
@@ -494,13 +580,220 @@
     }
   }
 
+  // ---------- saved summaries (timeline under the columns) ----------
+  const summariesList = document.getElementById('summaries-list')
+  const summariesToggle = document.getElementById('timeline-toggle')
+  const timelineEl = document.getElementById('timeline')
+  const timelineCount = document.getElementById('timeline-count')
+
   /**
-   * Load a stored chat into the columns.
+   * The saved-summary timeline, newest first.
    *
-   * The columns show the answers captured when the chat happened, NOT a fresh
-   * model run: opening a record is meant to read it again. Re-sending the
-   * prompts would answer a question whose answer the user already has, and cost
-   * quota on every model for a comparison already made.
+   * Each row is a link: the time, the prompt it summarized, and what the report
+   * contains. Clicking reopens the original summary page; × removes it.
+   */
+  function renderSummaries() {
+    summariesList.textContent = ''
+    const entries = state.summaries
+    timelineCount.textContent = entries.length === 0
+      ? ''
+      : `${entries.length} saved`
+    if (entries.length === 0) {
+      const empty = document.createElement('li')
+      empty.className = 'timeline-empty'
+      empty.textContent = 'No summaries yet — press Summarize and the result appears here.'
+      summariesList.append(empty)
+      return
+    }
+    for (const entry of entries) {
+      const when = entry.createdAt ?? Date.now()
+
+      const item = document.createElement('li')
+      item.className = 'timeline-item'
+      item.dataset.active = String(state.activeSummaryId === entry.id)
+
+      const dot = document.createElement('span')
+      dot.className = 'timeline-dot'
+
+      const open = document.createElement('button')
+      open.className = 'timeline-open'
+      open.type = 'button'
+      open.title = `${entry.title || '(untitled)'}\nClick to reopen this summary`
+      const stamp = document.createElement('span')
+      stamp.className = 'timeline-when'
+      stamp.textContent = `${dayLabel(when)} ${timeLabel(when)}`
+
+      const label = document.createElement('span')
+      label.className = 'timeline-label'
+      label.textContent = entry.title === '' ? '(untitled)' : entry.title
+
+      const meta = document.createElement('span')
+      meta.className = 'timeline-meta'
+      const bits = [`${entry.consensus} agreed`, `${entry.differences} differ`]
+      if (entry.links > 0) bits.push(`${entry.links} links`)
+      if (entry.degraded === true) bits.push('no model summary')
+      meta.textContent = bits.join(' · ')
+
+      open.append(stamp, label, meta)
+      open.addEventListener('click', () => { void openSummary(entry.id) })
+
+      const tag = tagChip(entry)
+
+      const del = document.createElement('button')
+      del.className = 'timeline-del'
+      del.textContent = '×'
+      del.title = 'Delete this summary'
+      del.addEventListener('click', (event) => {
+        event.stopPropagation()
+        void deleteSummary(entry.id)
+      })
+
+      item.append(dot, tag, open, del)
+      summariesList.append(item)
+    }
+  }
+
+  /**
+   * The topic chip at the left of one timeline row.
+   *
+   * It renders as a chip and turns into a text field on click, so renaming a
+   * row is one click and Enter. Escape abandons the edit; blur keeps it, which
+   * is what a reader expects when they click away mid-sentence.
+   * @param {object} entry - one summary from the timeline list.
+   * @returns {HTMLElement} the chip button.
+   */
+  function tagChip(entry) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'timeline-tag'
+    button.textContent = entry.tag === '' ? 'tag' : entry.tag
+    button.dataset.edited = String(entry.tagEdited === true)
+    button.dataset.empty = String(entry.tag === '')
+    button.title = entry.tag === ''
+      ? 'No tag yet — click to name this summary'
+      : `${entry.tag}\nClick to rename`
+    button.addEventListener('click', (event) => {
+      event.stopPropagation()
+      startTagEdit(entry, button)
+    })
+    return button
+  }
+
+  /** Swap the chip for an input, then save whatever the user settles on. */
+  function startTagEdit(entry, button) {
+    if (button.dataset.editing === 'true') return
+    button.dataset.editing = 'true'
+    const input = document.createElement('input')
+    input.className = 'timeline-tag-input'
+    input.type = 'text'
+    input.value = entry.tag ?? ''
+    // Matches USER_TAG_CHARS in lib/summary.js: the store clips anything longer,
+    // and a field that silently shortens what was typed is worse than a limit.
+    input.maxLength = 56
+    input.placeholder = 'tag this summary'
+    button.replaceWith(input)
+    input.focus()
+    input.select()
+
+    let settled = false
+    const finish = (save) => {
+      if (settled) return
+      settled = true
+      const value = input.value.trim()
+      input.replaceWith(button)
+      delete button.dataset.editing
+      if (!save) return
+      if (value === (entry.tag ?? '')) return
+      void saveSummaryTag(entry.id, value)
+    }
+    input.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') { event.preventDefault(); finish(true) }
+      else if (event.key === 'Escape') { event.preventDefault(); finish(false) }
+      event.stopPropagation()
+    })
+    input.addEventListener('blur', () => finish(true))
+    input.addEventListener('click', (event) => event.stopPropagation())
+  }
+
+  /** Persist a new tag, then repaint the row from what the store kept. */
+  async function saveSummaryTag(id, tag) {
+    const response = await api('summaries/tag', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id, tag }),
+    }).catch(() => null)
+    const payload = response === null ? null : await response.json().catch(() => null)
+    if (payload?.ok === true) {
+      const stored = state.summaries.find((entry) => entry.id === id)
+      if (stored !== undefined) {
+        stored.tag = payload.value.tag
+        stored.tagAuto = payload.value.tagAuto
+        stored.tagEdited = payload.value.tagEdited === true
+      }
+      renderSummaries()
+      status(payload.value.tag === '' ? 'tag cleared' : `tagged “${payload.value.tag}”`, 'ok')
+    } else {
+      status(payload?.error ?? 'could not save that tag', 'bad')
+    }
+  }
+
+  async function refreshSummaries() {
+    try {
+      const response = await api('summaries?limit=200')
+      const payload = await response.json()
+      if (payload.ok !== true) return
+      state.summaries = Array.isArray(payload.value?.entries) ? payload.value.entries : []
+      renderSummaries()
+    } catch {
+      /* transient: the next poll retries */
+    }
+  }
+
+  /** Reopen one saved summary in its own Edge window. */
+  async function openSummary(id) {
+    state.activeSummaryId = id
+    renderSummaries()
+    const response = await api('summaries/open', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => null)
+    const payload = response === null ? null : await response.json().catch(() => null)
+    if (payload?.ok === true) status('reopened that summary', 'ok')
+    else status(payload?.error ?? 'could not open that summary', 'bad')
+  }
+
+  async function deleteSummary(id) {
+    const response = await api('summaries/delete', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id }),
+    }).catch(() => null)
+    const payload = response === null ? null : await response.json().catch(() => null)
+    if (payload?.ok === true) {
+      if (state.activeSummaryId === id) state.activeSummaryId = null
+      status('summary deleted', 'ok')
+      await refreshSummaries()
+    } else {
+      status(payload?.error ?? 'could not delete that summary', 'bad')
+    }
+  }
+
+  // Collapsing hands the height straight back to the columns.
+  summariesToggle.addEventListener('click', () => {
+    const collapsed = timelineEl.dataset.collapsed !== 'true'
+    timelineEl.dataset.collapsed = String(collapsed)
+    summariesToggle.setAttribute('aria-expanded', String(!collapsed))
+    summariesToggle.title = collapsed ? 'Expand the timeline' : 'Collapse the timeline'
+  })
+
+  /**
+   * Reopen a stored chat in the columns.
+   *
+   * Each column is navigated to that provider's own conversation URL, so the
+   * model's real view is restored — the same outlook as a live session. Columns
+   * whose URL was not recorded fall back to the captured text. No prompt is
+   * re-sent, so this costs no quota.
    */
   async function openHistory(id) {
     const entry = state.history.find((candidate) => candidate.id === id)
@@ -511,6 +804,7 @@
     }
     state.activeHistoryId = id
     renderHistory()
+    status('restoring the chat in every column…')
     try {
       const response = await api('history/open', {
         method: 'POST',
@@ -523,28 +817,45 @@
         return
       }
       showHistoryInColumns(payload.value)
-      const answered = Object.values(payload.value.models ?? {}).filter((count) => count > 0).length
+      const native = (payload.value.native ?? []).length
+      const fallback = (payload.value.fallback ?? []).length
       const missing = Object.values(payload.value.missing ?? {}).filter((list) => list.length > 0).length
-      status(
-        missing === 0
-          ? `loaded “${payload.value.title}” · ${answered} models with stored answers`
-          : `loaded “${payload.value.title}” · ${answered} models answered, ${missing} did not`,
-        missing === 0 ? 'ok' : '',
-      )
+      const parts = [`restored “${payload.value.title}”`]
+      if (native > 0) parts.push(`${native} reopened natively`)
+      if (fallback > 0) parts.push(`${fallback} from captured text`)
+      if (missing > 0) parts.push(`${missing} had no answer`)
+      status(parts.join(' · '), missing === 0 ? 'ok' : '')
     } catch (error) {
       status(String(error.message ?? error), 'bad')
     }
   }
 
-  /** Render a loaded chat into every column, replacing the live view. */
+  /**
+   * Show a loaded chat in the columns.
+   *
+   * A column whose provider URL could be restored is left in its LIVE mode: the
+   * Host navigated that tab to the real conversation, so its screenshot already
+   * shows the model's own view — formatting, code blocks and all. Only columns
+   * without a stored URL fall back to rendering the captured text, which is what
+   * every column did before the URLs were kept.
+   */
   function showHistoryInColumns(value) {
+    const native = new Set(value.native ?? [])
     for (const pane of state.panes.values()) {
       const refs = columnRefs.get(pane.id)
       if (!refs) continue
+      refs.hvHead.textContent = ''
+      refs.hvBody.textContent = ''
+
+      if (native.has(pane.id)) {
+        // The provider's own conversation is on screen; nothing to overlay.
+        refs.body.dataset.mode = 'live'
+        continue
+      }
+
       const answers = value.transcripts?.[pane.id] ?? []
       const missing = value.missing?.[pane.id] ?? []
 
-      refs.hvHead.textContent = ''
       const label = document.createElement('b')
       label.textContent = pane.title
       const note = document.createElement('span')
@@ -553,7 +864,6 @@
         : ` · ${answers.length} ${answers.length === 1 ? 'turn' : 'turns'} from history`
       refs.hvHead.append(label, note)
 
-      refs.hvBody.textContent = ''
       for (const answer of answers) {
         const block = document.createElement('div')
         block.className = 'hv-turn'
@@ -896,13 +1206,14 @@
   async function pumpFrames() {
     // Self-heal: a previous tick that never settled must not stop the stream.
     if (frameBusy && Date.now() - frameBusySince < FRAME_TIMEOUT_MS) return
-    // While a stored chat is on screen the live screenshots are hidden anyway;
-    // skipping the fetch avoids pulling megabytes of frames nobody can see.
-    if (state.viewingHistory) return
     frameBusy = true
     frameBusySince = Date.now()
     try {
       for (const pane of state.panes.values()) {
+        // A column rendering captured text has no screenshot to update; a column
+        // showing its restored native conversation must keep streaming.
+        const refs = columnRefs.get(pane.id)
+        if (refs && refs.body.dataset.mode === 'history') continue
         let response
         try {
           response = await fetchWithTimeout(withToken(`frame?pane=${encodeURIComponent(pane.id)}&etag=${encodeURIComponent(pane.etag)}`), FRAME_TIMEOUT_MS)
@@ -915,11 +1226,11 @@
         const blob = await response.blob()
         if (blob.size === 0) continue
         const nextUrl = URL.createObjectURL(blob)
-        const refs = columnRefs.get(pane.id)
-        if (refs) {
-          refs.img.src = nextUrl
-          refs.img.style.visibility = 'visible'
-          refs.placeholder.style.display = 'none'
+        const target = columnRefs.get(pane.id)
+        if (target) {
+          target.img.src = nextUrl
+          target.img.style.visibility = 'visible'
+          target.placeholder.style.display = 'none'
         }
         // Release the previous object URL only after the new one is attached, so
         // the <img> never points at a revoked blob.
@@ -1125,8 +1436,12 @@
       }
       const value = payload.value
       const scope = value.source === 'history' ? 'stored chat' : 'live columns'
-      sendStateEl.textContent = `summary opened · ${value.answers} columns from the ${scope}, ${value.differences} differences`
+      const tagged = value.tag === undefined || value.tag === '' ? '' : ` · “${value.tag}”`
+      sendStateEl.textContent = `summary saved${tagged} · ${value.answers} columns from the ${scope}, ${value.differences} differences`
       sendStateEl.dataset.tone = 'ok'
+      // The new summary is in the timeline immediately, not on the next poll.
+      state.activeSummaryId = value.id ?? null
+      await refreshSummaries()
     } catch (error) {
       sendStateEl.textContent = String(error.message ?? error)
       sendStateEl.dataset.tone = 'bad'
@@ -1174,10 +1489,13 @@
   focusPane(state.activePane)
   void refreshState()
   void refreshHistory()
+  void refreshSummaries()
   setInterval(() => { void refreshState() }, 4000)
   // The history changes when a prompt is sent or a column finishes answering,
   // so it polls a little slower than the pane status.
   setInterval(() => { void refreshHistory() }, 8000)
+  // Summaries only change when the user presses Summarize or deletes one.
+  setInterval(() => { void refreshSummaries() }, 10000)
   startFrames()
 })()
 </script>

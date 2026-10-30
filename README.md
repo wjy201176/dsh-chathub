@@ -12,14 +12,17 @@ Each column is the provider's real web app running in a background tab, driven o
 - **New Session** clears every column back to a fresh chat.
 - **History** records what you sent and what each model answered, grouped by day on a timeline. Click an entry to **load the stored answers back into the columns** — no prompt is re-sent and no quota is spent. The ⤢ button opens a read-only transcript.
 - **Summarize** asks a model for one consensus summary plus a table of where the models disagreed, and opens it in its own window. It summarizes whichever source is on screen: the stored chat when you opened one, otherwise the live columns.
+- **Summary timeline** under the prompt bar keeps every report: one row per summary with the time, a **topic tag** and the counts. Click a row to reopen that report; click its tag to rename it — your label is saved and survives a restart. Clearing a tag puts back the one the model proposed.
 
 ## Layout
 
 ```
 ┌──────────┬──────────────────────────────────────────────┐
-│          │  ChatGPT │ Gemini │ Claude │ DeepSeek │ Grok │  ← 90% height
+│          │  ChatGPT │ Gemini │ Claude │ DeepSeek │ Grok │
 │   rail   ├──────────────────────────────────────────────┤
-│   10%    │  prompt bar · attach · voice · send · summary │  ← 10% height
+│   10%    │  prompt bar · attach · voice · send · summary │
+│          ├──────────────────────────────────────────────┤
+│          │  summaries · tag · time · counts (collapsible)│
 └──────────┴──────────────────────────────────────────────┘
 ```
 
@@ -59,6 +62,7 @@ Grok signs in through `accounts.x.ai`; that hand-off must be done by you in the 
 - Columns are **screenshots** of background tabs, refreshed on a timer, with input forwarded as real key and mouse events. The tabs are never focused, so all five stay live at once.
 - Cookies are imported read-only from Edge; the plugin never writes to your real Edge profile.
 - History is stored in `history.json` beside the Edge profile and written atomically, so a crash cannot truncate it.
+- Saved summaries live in `summaries.json` beside it, written the same way. Only the digest and the per-model conversation links are kept — not the answer bodies.
 - The summarizer runs through the harness LLM service, so no provider credential is handled by this plugin.
 
 ## Requirements

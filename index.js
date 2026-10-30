@@ -53,6 +53,11 @@ const DEFAULTS = {
   // turn is stored, and how often to check.
   historyCaptureMs: 180000,
   historyPollMs: 3000,
+  // How long to wait for a conversation to finish rendering when matching a
+  // stored chat back to its provider URL, and the overall budget for that
+  // search.
+  settleMs: 20000,
+  recoverMs: 45000,
 }
 
 function resolveConfig(config) {
@@ -195,6 +200,26 @@ export function apply(ctx, config) {
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await openHistory(controller, (await readJsonBody(req))?.id ?? ''))
           return
+        case '/summaries':
+          if (methodRefused(req, res, ['GET', 'HEAD'])) return
+          sendJson(res, 200, await controller.listSummaries({ limit: Number(new URL(req.url ?? '/', 'http://local').searchParams.get('limit') ?? '') || undefined }))
+          return
+        case '/summaries/get':
+          if (methodRefused(req, res, ['GET', 'HEAD'])) return
+          sendJson(res, 200, await controller.getSummary(new URL(req.url ?? '/', 'http://local').searchParams.get('id') ?? ''))
+          return
+        case '/summaries/open':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await openSummary(controller, (await readJsonBody(req))?.id ?? ''))
+          return
+        case '/summaries/delete':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await controller.deleteSummary((await readJsonBody(req))?.id ?? ''))
+          return
+        case '/summaries/tag':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await controller.setSummaryTag(await readJsonBody(req)))
+          return
         case '/attach':
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await controller.attach(await readBody(req), req.headers))
@@ -279,7 +304,7 @@ async function summarize(ctx, controller) {
     return { ok: false, error: 'the harness LLM service is unavailable' }
   }
 
-  const { answers, failed, source } = await controller.collectAnswers()
+  const { answers, failed, source, links } = await controller.collectAnswers()
   if (answers.length === 0) {
     return {
       ok: false,
@@ -304,23 +329,46 @@ async function summarize(ctx, controller) {
     }
   }
 
+  // Save it: producing a summary reads every column and asks a model, so the
+  // result is worth keeping even if the window is closed a moment later. This
+  // comes before the render so the report shows the same tag the timeline row
+  // will — including the prompt-derived one used when the model proposed none.
+  const saved = controller.summaries.add({
+    prompt,
+    tag: result.digest.tag,
+    model: result.model,
+    source,
+    degraded: result.degraded === true,
+    reason: result.reason ?? '',
+    digest: result.digest,
+    titles: answers.map((answer) => answer.title),
+    answered: answers.map((answer) => answer.title),
+    failed,
+    links,
+  })
+
   const html = renderDigestPage({
     digest: result.digest,
+    tag: saved.tag,
     answers,
     prompt,
-    createdAt: new Date().toLocaleString(),
+    createdAt: new Date(saved.createdAt).toLocaleString(),
     model: result.model,
     failed,
     degraded: result.degraded === true,
     reason: result.reason ?? '',
     source,
+    links,
   })
+
   const opened = await controller.openReport(html)
   if (opened.ok !== true) return opened
 
   return {
     ok: true,
     value: {
+      id: saved.id,
+      tag: saved.tag,
       answers: answers.length,
       failed: failed.length,
       differences: result.digest.differences.length,
@@ -330,8 +378,35 @@ async function summarize(ctx, controller) {
       degraded: result.degraded === true,
       reason: result.reason ?? '',
       source,
+      links: Object.keys(links ?? {}).length,
     },
   }
+}
+
+/**
+ * Re-open a saved summary in its own Edge window.
+ * @param controller - the Edge controller owning the browser.
+ * @param id - the summary id.
+ * @returns {Promise<object>} a result envelope.
+ */
+async function openSummary(controller, id) {
+  const entry = controller.summaries.get(String(id ?? ''))
+  if (entry === null) return { ok: false, error: 'unknown-summary' }
+  const html = renderDigestPage({
+    digest: entry.digest,
+    tag: entry.tag,
+    answers: (entry.titles ?? []).map((title) => ({ title, text: '' })),
+    answered: entry.answered ?? [],
+    prompt: entry.prompt,
+    createdAt: new Date(entry.createdAt).toLocaleString(),
+    model: entry.model,
+    failed: entry.failed ?? [],
+    degraded: entry.degraded === true,
+    reason: entry.reason ?? '',
+    source: entry.source,
+    links: entry.links ?? {},
+  })
+  return controller.openReport(html)
 }
 
 /**
