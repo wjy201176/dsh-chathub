@@ -65,6 +65,14 @@ Grok signs in through `accounts.x.ai`; that hand-off must be done by you in the 
 - Saved summaries live in `summaries.json` beside it, written the same way. Only the digest and the per-model conversation links are kept — not the answer bodies.
 - The summarizer runs through the harness LLM service, so no provider credential is handled by this plugin.
 
+## Tests
+
+```bash
+node test/run.mjs        # or: npm test
+```
+
+Plain Node, no dependencies. The suites cover the tag normaliser and digest parser, the summary store (including upgrading reports written before tags existed), the report page, the controller's summary methods, and the real Host routes booted against a stub cordis context and driven over a socket.
+
 ## Requirements
 
 - DSH with the `webServer` service.
