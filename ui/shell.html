@@ -47,7 +47,19 @@
   .brand svg { flex: none; }
   .brand small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; }
   .rail-section { display: flex; flex-direction: column; gap: 6px; }
+  /* A hidden section must stay hidden: the display rule above would otherwise
+     beat the hidden attribute (the "viewing history" banner). */
+  .rail-section[hidden] { display: none !important; }
   .rail-title { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .6px; }
+  .rail-select {
+    width: 100%; font: inherit; font-size: 12px; color: var(--text);
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 8px; outline: none; cursor: pointer;
+  }
+  .rail-select:focus { border-color: var(--accent); }
+  /* Native option popups are light; pin their colours so the list stays readable
+     whatever the page theme is. */
+  .rail-select option { color: #111; background-color: #fff; }
   .pane-list { display: flex; flex-direction: column; gap: 4px; }
   .pane-chip {
     display: flex; align-items: center; gap: 8px;
@@ -141,13 +153,54 @@
   #grid { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 1px; background: var(--line); }
   .column { display: flex; flex-direction: column; min-width: 0; background: var(--bg); }
   .column-head {
-    height: 34px; flex: none; display: flex; align-items: center; gap: 8px;
-    padding: 0 10px; background: var(--panel); border-bottom: 1px solid var(--line);
+    height: 34px; flex: none; display: flex; align-items: center; gap: 6px;
+    padding: 0 8px; background: var(--panel); border-bottom: 1px solid var(--line);
   }
-  .column-head b { font-weight: 600; font-size: 12px; }
+  .column-head b { font-weight: 600; font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .column-head .spacer { flex: 1; }
-  .column-head button { font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 2px 4px; border-radius: 4px; }
-  .column-head button:hover { color: var(--text); background: var(--panel-2); }
+  /* The header actions read at the same weight as the model name, but sit in a
+     pill so they still look like buttons rather than a second title. */
+  .column-head button {
+    flex: none;
+    font: inherit; font-size: 12px; font-weight: 500; line-height: 1.2;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 999px;
+    cursor: pointer; padding: 2px 7px; white-space: nowrap;
+  }
+  .column-head button:hover { color: var(--text); border-color: var(--accent); background: var(--panel-2); }
+  .column-head button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .column-head button.full-screen { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .column-head button.full-screen:hover { color: var(--accent); border-color: var(--accent); background: var(--panel-2); }
+
+  /* ---- one column covering the whole window ("full screen") ---- */
+  body[data-expanded="true"] #rail,
+  body[data-expanded="true"] #composer,
+  body[data-expanded="true"] #timeline { display: none; }
+  #grid[data-expanded="true"] { display: flex; }
+  #grid[data-expanded="true"] .column { display: none; }
+  #grid[data-expanded="true"] .column[data-expanded="true"] { display: flex; flex: 1; }
+
+  /* ---- find bar (Ctrl+F) ---- */
+  #find-bar {
+    position: fixed; top: 44px; left: 50%; transform: translateX(-50%); z-index: 70;
+    display: none; align-items: center; gap: 4px; padding: 6px 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  }
+  #find-bar[data-open="true"] { display: flex; }
+  #find-input {
+    width: 230px; font: inherit; font-size: 12px; padding: 5px 8px;
+    color: var(--text); background: var(--panel-2);
+    border: 1px solid var(--line); border-radius: 6px; outline: none;
+  }
+  #find-input:focus { border-color: var(--accent); }
+  #find-input::-webkit-search-cancel-button { display: none; }
+  #find-count { font-size: 11px; color: var(--muted); min-width: 74px; text-align: center; white-space: nowrap; }
+  #find-bar button {
+    font: inherit; font-size: 11px; line-height: 1; color: var(--muted);
+    background: none; border: 0; cursor: pointer; padding: 4px 6px; border-radius: 4px;
+  }
+  #find-bar button:hover { color: var(--text); background: var(--panel-2); }
   .column-body { position: relative; flex: 1; min-height: 0; background: #0b0d11; overflow: hidden; }
   .column-body img { width: 100%; height: 100%; object-fit: fill; display: block; }
   .column-body .placeholder {
@@ -155,6 +208,9 @@
     align-items: center; justify-content: center; color: var(--muted); text-align: center; padding: 16px;
   }
   .column-body[data-focus="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+  /* The column whose match the find bar just jumped to. */
+  .column[data-find="true"] { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .column[data-find="true"] .column-head b { color: var(--accent); }
   .signin-overlay {
     position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
     font: inherit; font-size: 12px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
@@ -297,36 +353,44 @@
         <path d="M7 18.5v2.2L10.6 18.5"></path>
         <path d="M8 8.5h8M8 12h5.5"></path>
       </svg>
-      <span>chatHub<small>one prompt · every model</small></span>
+      <span>chatHub<small data-i18n="brand.tagline">one prompt · every model</small></span>
     </div>
 
     <div class="rail-section">
-      <button class="action primary" id="btn-new-session" title="Clear every column and start a fresh chat">＋ New Session</button>
+      <button class="action primary" id="btn-new-session" data-i18n="newSession" data-i18n-title="newSession.title" title="Clear every column and start a fresh chat">＋ New Session</button>
     </div>
 
     <div class="rail-section">
       <button class="history-head" id="history-toggle" data-open="true" aria-expanded="true">
-        <span>History</span>
+        <span data-i18n="history">History</span>
         <span class="caret">▾</span>
       </button>
       <div class="history-list" id="history-list"></div>
     </div>
 
     <div class="rail-section">
-      <div class="rail-title">Model columns</div>
+      <div class="rail-title" data-i18n="rail.models">Model columns</div>
       <div class="pane-list" id="pane-list"></div>
     </div>
 
     <div class="rail-section" id="history-banner" hidden>
-      <div class="rail-title">Viewing history</div>
-      <button class="action" id="btn-exit-history">← Back to live columns</button>
+      <div class="rail-title" data-i18n="rail.viewingHistory">Viewing history</div>
+      <button class="action" id="btn-exit-history" data-i18n="rail.backToLive">← Back to live columns</button>
     </div>
 
     <div class="rail-section">
-      <div class="rail-title">Session</div>
-      <button class="action" id="btn-reload">Reload all columns</button>
-      <button class="action" id="btn-cookies">Import Edge cookies</button>
-      <button class="action" id="btn-close">Close window</button>
+      <div class="rail-title" data-i18n="rail.language">Language</div>
+      <select class="rail-select" id="language-select" aria-label="Language">
+        <option value="en">English</option>
+        <option value="zh">中文</option>
+      </select>
+    </div>
+
+    <div class="rail-section">
+      <div class="rail-title" data-i18n="rail.session">Session</div>
+      <button class="action" id="btn-reload" data-i18n="rail.reloadAll">Reload all columns</button>
+      <button class="action" id="btn-cookies" data-i18n="rail.cookies">Import Edge cookies</button>
+      <button class="action" id="btn-close" data-i18n="rail.close">Close window</button>
     </div>
 
     <div class="rail-foot">
@@ -338,16 +402,16 @@
     <div id="grid"></div>
     <div id="composer">
       <div class="attachments" id="attachments"></div>
-      <textarea id="prompt" placeholder="Type one prompt for every model…  (Enter sends, Shift+Enter newline)"></textarea>
+      <textarea id="prompt" data-i18n-placeholder="prompt.placeholder" placeholder="Type one prompt for every model…  (Enter sends, Shift+Enter newline)"></textarea>
       <div class="composer-bar">
         <input type="file" id="file" multiple hidden>
-        <button class="action" id="btn-attach" title="Attach file">📎 Attach</button>
-        <button class="action" id="btn-voice" title="Voice input">🎙 Voice</button>
+        <button class="action" id="btn-attach" data-i18n="attach" data-i18n-title="attach.title" title="Attach file">📎 Attach</button>
+        <button class="action" id="btn-voice" data-i18n="voice" data-i18n-title="voice.title" title="Voice input">🎙 Voice</button>
         <span class="pill" id="hint"></span>
         <span class="grow"></span>
         <span class="pill" id="send-state"></span>
-        <button class="action primary" id="btn-send">Send to all</button>
-        <button class="action" id="btn-summarize" title="Summarize what the models agreed on and where they differ">Summarize</button>
+        <button class="action primary" id="btn-send" data-i18n="send">Send to all</button>
+        <button class="action" id="btn-summarize" data-i18n="summarize" data-i18n-title="summarize.title" title="Summarize what the models agreed on and where they differ">Summarize</button>
       </div>
     </div>
 
@@ -355,7 +419,7 @@
          away without leaving the window. -->
     <section id="timeline">
       <header id="timeline-head">
-        <span class="timeline-title">Summaries</span>
+        <span class="timeline-title" data-i18n="summaries.title">Summaries</span>
         <span class="timeline-count" id="timeline-count"></span>
         <span class="grow"></span>
         <button class="timeline-toggle" id="timeline-toggle" aria-expanded="true" title="Collapse the timeline">▾</button>
@@ -363,6 +427,17 @@
       <ol class="timeline" id="summaries-list"></ol>
     </section>
   </main>
+</div>
+
+<!-- Find in the models' answers. The columns are screenshots, so the browser's
+     own Ctrl+F cannot see their text; this bar asks the Host to search inside
+     the provider tabs and the matches appear as highlights in the screenshots. -->
+<div id="find-bar" role="search" aria-label="Find in the model chats">
+  <input id="find-input" type="search" data-i18n-placeholder="find.placeholder" placeholder="Find in the model chats…" autocomplete="off" spellcheck="false" aria-label="Find text">
+  <span id="find-count" aria-live="polite"></span>
+  <button id="find-prev" type="button" data-i18n-title="find.prev" title="Previous match (Shift+Enter)">↑</button>
+  <button id="find-next" type="button" data-i18n-title="find.next" title="Next match (Enter)">↓</button>
+  <button id="find-close" type="button" data-i18n-title="find.close" title="Close find (Esc)">✕</button>
 </div>
 
 <script>
@@ -379,6 +454,282 @@
   const FRAME_W = 520
   const FRAME_H = 1180
 
+  // ---------- interface language ----------
+  // The chatHub window's own dictionaries. Every visible string goes through
+  // t(); the language itself is stored by the Host (see /prefs), so it survives
+  // a restart and a new Edge profile.
+  const I18N = {
+    en: {
+      'brand.tagline': 'one prompt · every model',
+      'newSession': '＋ New Session',
+      'newSession.title': 'Clear every column and start a fresh chat',
+      'history': 'History',
+      'rail.models': 'Model columns',
+      'rail.viewingHistory': 'Viewing history',
+      'rail.backToLive': '← Back to live columns',
+      'rail.language': 'Language',
+      'rail.session': 'Session',
+      'rail.reloadAll': 'Reload all columns',
+      'rail.cookies': 'Import Edge cookies',
+      'rail.close': 'Close window',
+      'status.connecting': 'Connecting…',
+      'attach': '📎 Attach',
+      'attach.title': 'Attach file',
+      'voice': '🎙 Voice',
+      'voice.title': 'Voice input',
+      'prompt.placeholder': 'Type one prompt for every model…  (Enter sends, Shift+Enter newline)',
+      'send': 'Send to all',
+      'summarize': 'Summarize',
+      'summarize.title': 'Summarize what the models agreed on and where they differ',
+      'summaries.title': 'Summaries',
+      'find.placeholder': 'Find in the model chats…',
+      'find.prev': 'Previous match (Shift+Enter)',
+      'find.next': 'Next match (Enter)',
+      'find.close': 'Close find (Esc)',
+      'find.searching': 'searching…',
+      'find.noMatches': 'no matches',
+      'find.matches': '{n} matches',
+      'find.position': '{column} {local}/{localCount} · {global}/{total}',
+      'pane.signIn': 'sign in',
+      'pane.ready': 'ready',
+      'pane.loading': 'loading…',
+      'pane.waiting': 'waiting for composer',
+      'column.reload': 'reload',
+      'column.reload.title': 'Reload {model}',
+      'column.full': 'full',
+      'column.full.title': 'Show {model} full screen',
+      'column.restore': 'restore',
+      'column.restore.title': 'Back to all model columns',
+      'column.loading': 'loading the column…',
+      'column.click': 'click to interact',
+      'column.signIn': 'Sign in to {model}',
+      'column.openingSignIn': 'Opening sign-in…',
+      'column.liveView': '{model} live view',
+      'login.emailHint': 'Enter your {model} email in the column above — this login is saved',
+      'login.savedHint': 'Sign in to {model} in the column above — this login is saved',
+      'history.empty': 'No chats yet — send a prompt to start one.',
+      'history.untitled': '(untitled)',
+      'history.promptOne': '{n} prompt',
+      'history.prompts': '{n} prompts',
+      'history.delete': 'Delete this chat',
+      'history.viewTitle': 'Open a read-only transcript',
+      'history.replay': 'Click to replay this chat into all columns',
+      'history.today': 'Today',
+      'history.yesterday': 'Yesterday',
+      'history.daysAgo': '{n} days ago',
+      'summary.count': '{n} saved',
+      'summary.empty': 'No summaries yet — press Summarize and the result appears here.',
+      'summary.untitled': '(untitled)',
+      'summary.reopen': 'Click to reopen this summary',
+      'summary.agreed': '{n} agreed',
+      'summary.differ': '{n} differ',
+      'summary.links': '{n} links',
+      'summary.degraded': 'no model summary',
+      'summary.delete': 'Delete this summary',
+      'summary.tag': 'tag',
+      'summary.tagEmptyTitle': 'No tag yet — click to name this summary',
+      'summary.tagTitle': '{tag}\nClick to rename',
+      'summary.tagPlaceholder': 'tag this summary',
+      'summary.expand': 'Expand the timeline',
+      'summary.collapse': 'Collapse the timeline',
+      'status.chatDeleted': 'chat deleted',
+      'status.deleteChatFailed': 'could not delete that chat',
+      'status.tagCleared': 'tag cleared',
+      'status.tagged': 'tagged “{tag}”',
+      'status.tagSaveFailed': 'could not save that tag',
+      'status.summaryReopened': 'reopened that summary',
+      'status.summaryOpenFailed': 'could not open that summary',
+      'status.summaryDeleted': 'summary deleted',
+      'status.deleteSummaryFailed': 'could not delete that summary',
+      'status.noRecordedPrompts': 'that chat has no recorded prompts',
+      'status.restoringChat': 'restoring the chat in every column…',
+      'status.loadChatFailed': 'could not load that chat',
+      'status.restored': 'restored “{title}”',
+      'status.reopenedNatively': '{n} reopened natively',
+      'status.fromCaptured': '{n} from captured text',
+      'status.hadNoAnswer': '{n} had no answer',
+      'status.backLive': 'back to the live columns',
+      'status.transcriptOpened': 'opened the transcript in its own window',
+      'status.openChatFailed': 'could not open that chat',
+      'status.newSession': 'starting a new session in every column…',
+      'status.newSessionFailed': 'could not start a new session',
+      'status.allCleared': 'every column is on a fresh chat',
+      'status.clearedPartly': '{done}/{total} cleared · {failed} failed',
+      'status.stateUnavailable': 'state unavailable',
+      'status.edgeClosed': 'Edge window is not running',
+      'status.edgeOpen': 'Edge window is open · port {port}',
+      'status.hostUnreachable': 'host unreachable: {error}',
+      'status.sending': 'sending…',
+      'status.sendFailed': 'failed',
+      'status.sentAll': 'sent to all {n}',
+      'status.sentPartly': 'sent to {ok}/{total} · {failed} not ready',
+      'status.voiceUnavailable': 'voice input is unavailable in this browser',
+      'status.listening': 'listening…',
+      'status.voiceFailed': 'voice input failed: {error}',
+      'status.summarizing': 'summarizing… (this reads all columns and asks a model)',
+      'status.summaryFailed': 'summary failed',
+      'status.summarySaved': 'summary saved{tagged} · {answers} columns from the {scope}, {differences} differences',
+      'status.scopeHistory': 'stored chat',
+      'status.scopeLive': 'live columns',
+      'status.reloadingAll': 'reloading all columns…',
+      'status.closing': 'closing the window…',
+      'status.importingCookies': 'importing Edge cookies…',
+      'status.importedCookies': 'imported {n} cookies for {sites} sites',
+      'status.cookiesLocked': 'Edge is open, so its cookies are locked. Close Edge and try again, or sign in inside the columns (those logins are saved).',
+      'status.cookiesEmpty': 'no signed-in provider cookies found in Edge — sign in inside the columns instead',
+      'status.cookieImportFailed': 'cookie import failed',
+      'historyView.noAnswer': ' · no answer recorded',
+      'historyView.turn': ' · {n} turn from history',
+      'historyView.turns': ' · {n} turns from history',
+      'historyView.gaveNoAnswer': 'This model gave no answer for this chat (out of quota, signed out, or still generating).',
+      'historyView.noStored': 'No answer was stored for this model.',
+    },
+    zh: {
+      'brand.tagline': '一条提示词 · 对比所有模型',
+      'newSession': '＋ 新建会话',
+      'newSession.title': '清空所有分栏并开始新对话',
+      'history': '历史记录',
+      'rail.models': '模型分栏',
+      'rail.viewingHistory': '正在查看历史',
+      'rail.backToLive': '← 返回实时分栏',
+      'rail.language': '语言',
+      'rail.session': '会话',
+      'rail.reloadAll': '重新加载所有分栏',
+      'rail.cookies': '导入 Edge Cookie',
+      'rail.close': '关闭窗口',
+      'status.connecting': '正在连接…',
+      'attach': '📎 附件',
+      'attach.title': '添加附件',
+      'voice': '🎙 语音',
+      'voice.title': '语音输入',
+      'prompt.placeholder': '输入一条提示词，发送给所有模型…（Enter 发送，Shift+Enter 换行）',
+      'send': '发送给所有模型',
+      'summarize': '摘要',
+      'summarize.title': '总结模型之间的共识与分歧',
+      'summaries.title': '摘要',
+      'find.placeholder': '在模型对话中查找…',
+      'find.prev': '上一个匹配（Shift+Enter）',
+      'find.next': '下一个匹配（Enter）',
+      'find.close': '关闭查找（Esc）',
+      'find.searching': '正在搜索…',
+      'find.noMatches': '没有匹配',
+      'find.matches': '{n} 个匹配',
+      'find.position': '{column} {local}/{localCount} · 全部 {global}/{total}',
+      'pane.signIn': '需要登录',
+      'pane.ready': '就绪',
+      'pane.loading': '加载中…',
+      'pane.waiting': '等待输入框',
+      'column.reload': '刷新',
+      'column.reload.title': '刷新 {model}',
+      'column.full': '全屏',
+      'column.full.title': '全屏显示 {model}',
+      'column.restore': '还原',
+      'column.restore.title': '返回所有模型分栏',
+      'column.loading': '正在加载分栏…',
+      'column.click': '点击即可交互',
+      'column.signIn': '登录 {model}',
+      'column.openingSignIn': '正在打开登录…',
+      'column.liveView': '{model} 实时视图',
+      'login.emailHint': '在上方分栏中输入你的 {model} 邮箱 — 登录状态会保存',
+      'login.savedHint': '在上方分栏中登录 {model} — 登录状态会保存',
+      'history.empty': '还没有对话 — 发送一条提示词即可开始。',
+      'history.untitled': '（未命名）',
+      'history.promptOne': '{n} 条提问',
+      'history.prompts': '{n} 条提问',
+      'history.delete': '删除此对话',
+      'history.viewTitle': '打开只读记录',
+      'history.replay': '点击把此对话回放到所有分栏',
+      'history.today': '今天',
+      'history.yesterday': '昨天',
+      'history.daysAgo': '{n} 天前',
+      'summary.count': '已保存 {n} 条',
+      'summary.empty': '还没有摘要 — 点击「摘要」后结果显示在这里。',
+      'summary.untitled': '（未命名）',
+      'summary.reopen': '点击重新打开此摘要',
+      'summary.agreed': '{n} 点共识',
+      'summary.differ': '{n} 处分歧',
+      'summary.links': '{n} 个链接',
+      'summary.degraded': '无模型摘要',
+      'summary.delete': '删除此摘要',
+      'summary.tag': '标签',
+      'summary.tagEmptyTitle': '还没有标签 — 点击为此摘要命名',
+      'summary.tagTitle': '{tag}\n点击重命名',
+      'summary.tagPlaceholder': '为此摘要添加标签',
+      'summary.expand': '展开时间线',
+      'summary.collapse': '收起时间线',
+      'status.chatDeleted': '对话已删除',
+      'status.deleteChatFailed': '无法删除该对话',
+      'status.tagCleared': '标签已清除',
+      'status.tagged': '已标记为“{tag}”',
+      'status.tagSaveFailed': '无法保存标签',
+      'status.summaryReopened': '已重新打开该摘要',
+      'status.summaryOpenFailed': '无法打开该摘要',
+      'status.summaryDeleted': '摘要已删除',
+      'status.deleteSummaryFailed': '无法删除该摘要',
+      'status.noRecordedPrompts': '该对话没有记录提问',
+      'status.restoringChat': '正在把所有分栏恢复到该对话…',
+      'status.loadChatFailed': '无法加载该对话',
+      'status.restored': '已恢复“{title}”',
+      'status.reopenedNatively': '{n} 个原生恢复',
+      'status.fromCaptured': '{n} 个来自记录文本',
+      'status.hadNoAnswer': '{n} 个没有回答',
+      'status.backLive': '已返回实时分栏',
+      'status.transcriptOpened': '已在独立窗口打开记录',
+      'status.openChatFailed': '无法打开该对话',
+      'status.newSession': '正在为所有分栏开始新会话…',
+      'status.newSessionFailed': '无法开始新会话',
+      'status.allCleared': '所有分栏均已开始新对话',
+      'status.clearedPartly': '已清空 {done}/{total} · {failed} 个失败',
+      'status.stateUnavailable': '状态不可用',
+      'status.edgeClosed': 'Edge 窗口未运行',
+      'status.edgeOpen': 'Edge 窗口已打开 · 端口 {port}',
+      'status.hostUnreachable': '无法连接宿主：{error}',
+      'status.sending': '正在发送…',
+      'status.sendFailed': '发送失败',
+      'status.sentAll': '已发送给全部 {n} 个模型',
+      'status.sentPartly': '已发送 {ok}/{total} · {failed} 个未就绪',
+      'status.voiceUnavailable': '此浏览器不支持语音输入',
+      'status.listening': '正在聆听…',
+      'status.voiceFailed': '语音输入失败：{error}',
+      'status.summarizing': '正在总结…（会读取所有分栏并调用模型）',
+      'status.summaryFailed': '总结失败',
+      'status.summarySaved': '摘要已保存{tagged} · 来自{scope}的 {answers} 个分栏，{differences} 处分歧',
+      'status.scopeHistory': '记录对话',
+      'status.scopeLive': '实时分栏',
+      'status.reloadingAll': '正在重新加载所有分栏…',
+      'status.closing': '正在关闭窗口…',
+      'status.importingCookies': '正在导入 Edge Cookie…',
+      'status.importedCookies': '已导入 {n} 条 Cookie，覆盖 {sites} 个站点',
+      'status.cookiesLocked': 'Edge 正在运行，Cookie 数据库被占用。请退出 Edge 后重试，或在分栏内直接登录（登录状态会保存）。',
+      'status.cookiesEmpty': 'Edge 中没有已登录模型的 Cookie — 请在分栏内直接登录。',
+      'status.cookieImportFailed': 'Cookie 导入失败',
+      'historyView.noAnswer': ' · 没有记录回答',
+      'historyView.turn': ' · 来自历史的 {n} 轮对话',
+      'historyView.turns': ' · 来自历史的 {n} 轮对话',
+      'historyView.gaveNoAnswer': '该模型对这次对话没有回答（额度用尽、已退出登录，或仍在生成）。',
+      'historyView.noStored': '没有为该模型保存回答。',
+    },
+  }
+
+  let language = 'en'
+  const LOCALES = { en: 'en-US', zh: 'zh-CN' }
+
+  /** The locale used for the dates in the history and summary timelines. */
+  const locale = () => LOCALES[language] ?? 'en-US'
+
+  /**
+   * Look up one interface string.
+   * @param {string} key - a key in {@link I18N}.
+   * @param {object} [vars] - `{name}` placeholders to substitute.
+   * @returns {string} the string in the current language, or English when the translation is missing.
+   */
+  function t(key, vars) {
+    const table = I18N[language] ?? I18N.en
+    const template = table[key] ?? I18N.en[key] ?? key
+    if (vars === undefined) return template
+    return template.replace(/\{(\w+)\}/g, (match, name) => (vars[name] === undefined ? match : String(vars[name])))
+  }
+
   // The chatHub window is its own browser profile, so it has no DSH session
   // cookie. The Host put a random per-launch token in this page's URL; every
   // API call echoes it back so the Host can authenticate the window.
@@ -388,8 +739,10 @@
   const api = (path, init) => fetch(withToken(path), { cache: 'no-store', ...init, headers: { ...authHeaders, ...(init?.headers ?? {}) } })
 
   const state = {
-    panes: new Map(PANES.map((p) => [p.id, { ...p, status: null, etag: '', url: '', focused: false }])),
+    panes: new Map(PANES.map((p) => [p.id, { ...p, status: null, etag: '', url: '', focused: false, frameW: FRAME_W, frameH: FRAME_H }])),
     activePane: PANES[0].id,
+    /** The column that covers the window, or null for the five-column view. */
+    expandedPane: null,
     attachments: [],
     sending: false,
     summarizing: false,
@@ -404,6 +757,8 @@
     /** While in the future, the status line shows an action message, not the poll. */
     statusHoldUntil: 0,
     voice: null,
+    /** Ctrl+F state: matches per column, the global position, and the debounce. */
+    find: { open: false, query: '', total: 0, counts: {}, order: [], position: -1, activePane: null, active: null, searching: false, pendingStep: 0, sequence: 0, timer: null },
   }
 
   // ---------- rail ----------
@@ -460,10 +815,10 @@
   }
 
   function paneSubtitle(pane) {
-    if (pane.status?.loginRequired === true) return 'sign in'
-    if (pane.status?.ready === true) return 'ready'
-    if (pane.status === null) return 'loading…'
-    return 'waiting for composer'
+    if (pane.status?.loginRequired === true) return t('pane.signIn')
+    if (pane.status?.ready === true) return t('pane.ready')
+    if (pane.status === null) return t('pane.loading')
+    return t('pane.waiting')
   }
 
   // ---------- history ----------
@@ -479,15 +834,15 @@
     const day = new Date(date)
     day.setHours(0, 0, 0, 0)
     const diffDays = Math.round((today - day.getTime()) / 86400000)
-    if (diffDays === 0) return 'Today'
-    if (diffDays === 1) return 'Yesterday'
-    if (diffDays < 7) return `${diffDays} days ago`
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    if (diffDays === 0) return t('history.today')
+    if (diffDays === 1) return t('history.yesterday')
+    if (diffDays < 7) return t('history.daysAgo', { n: diffDays })
+    return date.toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' })
   }
 
   /** "14:32" — the time shown under each entry. */
   function timeLabel(ms) {
-    return new Date(ms).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    return new Date(ms).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
   }
 
   function renderHistory() {
@@ -496,7 +851,7 @@
     if (entries.length === 0) {
       const empty = document.createElement('div')
       empty.className = 'history-empty'
-      empty.textContent = 'No chats yet — send a prompt to start one.'
+      empty.textContent = t('history.empty')
       historyList.append(empty)
       return
     }
@@ -514,21 +869,21 @@
       const item = document.createElement('button')
       item.className = 'history-item'
       item.dataset.active = String(state.activeHistoryId === entry.id)
-      item.title = entry.title === '' ? '(untitled)' : entry.title
+      item.title = entry.title === '' ? t('history.untitled') : entry.title
 
       const title = document.createElement('span')
       title.className = 'title'
-      title.textContent = entry.title === '' ? '(untitled)' : entry.title
+      title.textContent = entry.title === '' ? t('history.untitled') : entry.title
 
       const meta = document.createElement('span')
       meta.className = 'meta'
       const turns = Array.isArray(entry.turns) ? entry.turns.length : 0
-      meta.textContent = `${timeLabel(entry.updatedAt ?? entry.createdAt ?? Date.now())} · ${turns} ${turns === 1 ? 'prompt' : 'prompts'}`
+      meta.textContent = `${timeLabel(entry.updatedAt ?? entry.createdAt ?? Date.now())} · ${t(turns === 1 ? 'history.promptOne' : 'history.prompts', { n: turns })}`
 
       const del = document.createElement('button')
       del.className = 'del'
       del.textContent = '×'
-      del.title = 'Delete this chat'
+      del.title = t('history.delete')
       del.addEventListener('click', (event) => {
         event.stopPropagation()
         void deleteHistory(entry.id)
@@ -539,14 +894,14 @@
       const view = document.createElement('button')
       view.className = 'view'
       view.textContent = '⤢'
-      view.title = 'Open a read-only transcript'
+      view.title = t('history.viewTitle')
       view.addEventListener('click', (event) => {
         event.stopPropagation()
         void viewHistory(entry.id)
       })
 
       item.append(title, meta, view, del)
-      item.title = `${entry.title === '' ? '(untitled)' : entry.title}\nClick to replay this chat into all columns`
+      item.title = `${entry.title === '' ? t('history.untitled') : entry.title}\n${t('history.replay')}`
       item.addEventListener('click', () => { void openHistory(entry.id) })
       historyList.append(item)
     }
@@ -573,10 +928,10 @@
     const payload = response === null ? null : await response.json().catch(() => null)
     if (payload?.ok === true) {
       if (state.activeHistoryId === id) state.activeHistoryId = null
-      status('chat deleted', 'ok')
+      status(t('status.chatDeleted'), 'ok')
       await refreshHistory()
     } else {
-      status(payload?.error ?? 'could not delete that chat', 'bad')
+      status(payload?.error ?? t('status.deleteChatFailed'), 'bad')
     }
   }
 
@@ -597,11 +952,11 @@
     const entries = state.summaries
     timelineCount.textContent = entries.length === 0
       ? ''
-      : `${entries.length} saved`
+      : t('summary.count', { n: entries.length })
     if (entries.length === 0) {
       const empty = document.createElement('li')
       empty.className = 'timeline-empty'
-      empty.textContent = 'No summaries yet — press Summarize and the result appears here.'
+      empty.textContent = t('summary.empty')
       summariesList.append(empty)
       return
     }
@@ -618,20 +973,23 @@
       const open = document.createElement('button')
       open.className = 'timeline-open'
       open.type = 'button'
-      open.title = `${entry.title || '(untitled)'}\nClick to reopen this summary`
+      open.title = `${entry.title || t('summary.untitled')}\n${t('summary.reopen')}`
       const stamp = document.createElement('span')
       stamp.className = 'timeline-when'
       stamp.textContent = `${dayLabel(when)} ${timeLabel(when)}`
 
       const label = document.createElement('span')
       label.className = 'timeline-label'
-      label.textContent = entry.title === '' ? '(untitled)' : entry.title
+      label.textContent = entry.title === '' ? t('summary.untitled') : entry.title
 
       const meta = document.createElement('span')
       meta.className = 'timeline-meta'
-      const bits = [`${entry.consensus} agreed`, `${entry.differences} differ`]
-      if (entry.links > 0) bits.push(`${entry.links} links`)
-      if (entry.degraded === true) bits.push('no model summary')
+      const bits = [
+        t('summary.agreed', { n: Number(entry.consensus ?? 0) }),
+        t('summary.differ', { n: Number(entry.differences ?? 0) }),
+      ]
+      if (entry.links > 0) bits.push(t('summary.links', { n: entry.links }))
+      if (entry.degraded === true) bits.push(t('summary.degraded'))
       meta.textContent = bits.join(' · ')
 
       open.append(stamp, label, meta)
@@ -642,7 +1000,7 @@
       const del = document.createElement('button')
       del.className = 'timeline-del'
       del.textContent = '×'
-      del.title = 'Delete this summary'
+      del.title = t('summary.delete')
       del.addEventListener('click', (event) => {
         event.stopPropagation()
         void deleteSummary(entry.id)
@@ -666,12 +1024,12 @@
     const button = document.createElement('button')
     button.type = 'button'
     button.className = 'timeline-tag'
-    button.textContent = entry.tag === '' ? 'tag' : entry.tag
+    button.textContent = entry.tag === '' ? t('summary.tag') : entry.tag
     button.dataset.edited = String(entry.tagEdited === true)
     button.dataset.empty = String(entry.tag === '')
     button.title = entry.tag === ''
-      ? 'No tag yet — click to name this summary'
-      : `${entry.tag}\nClick to rename`
+      ? t('summary.tagEmptyTitle')
+      : t('summary.tagTitle', { tag: entry.tag })
     button.addEventListener('click', (event) => {
       event.stopPropagation()
       startTagEdit(entry, button)
@@ -690,7 +1048,7 @@
     // Matches USER_TAG_CHARS in lib/summary.js: the store clips anything longer,
     // and a field that silently shortens what was typed is worse than a limit.
     input.maxLength = 56
-    input.placeholder = 'tag this summary'
+    input.placeholder = t('summary.tagPlaceholder')
     button.replaceWith(input)
     input.focus()
     input.select()
@@ -731,9 +1089,9 @@
         stored.tagEdited = payload.value.tagEdited === true
       }
       renderSummaries()
-      status(payload.value.tag === '' ? 'tag cleared' : `tagged “${payload.value.tag}”`, 'ok')
+      status(payload.value.tag === '' ? t('status.tagCleared') : t('status.tagged', { tag: payload.value.tag }), 'ok')
     } else {
-      status(payload?.error ?? 'could not save that tag', 'bad')
+      status(payload?.error ?? t('status.tagSaveFailed'), 'bad')
     }
   }
 
@@ -759,8 +1117,8 @@
       body: JSON.stringify({ id }),
     }).catch(() => null)
     const payload = response === null ? null : await response.json().catch(() => null)
-    if (payload?.ok === true) status('reopened that summary', 'ok')
-    else status(payload?.error ?? 'could not open that summary', 'bad')
+    if (payload?.ok === true) status(t('status.summaryReopened'), 'ok')
+    else status(payload?.error ?? t('status.summaryOpenFailed'), 'bad')
   }
 
   async function deleteSummary(id) {
@@ -772,10 +1130,10 @@
     const payload = response === null ? null : await response.json().catch(() => null)
     if (payload?.ok === true) {
       if (state.activeSummaryId === id) state.activeSummaryId = null
-      status('summary deleted', 'ok')
+      status(t('status.summaryDeleted'), 'ok')
       await refreshSummaries()
     } else {
-      status(payload?.error ?? 'could not delete that summary', 'bad')
+      status(payload?.error ?? t('status.deleteSummaryFailed'), 'bad')
     }
   }
 
@@ -784,7 +1142,7 @@
     const collapsed = timelineEl.dataset.collapsed !== 'true'
     timelineEl.dataset.collapsed = String(collapsed)
     summariesToggle.setAttribute('aria-expanded', String(!collapsed))
-    summariesToggle.title = collapsed ? 'Expand the timeline' : 'Collapse the timeline'
+    summariesToggle.title = collapsed ? t('summary.expand') : t('summary.collapse')
   })
 
   /**
@@ -799,12 +1157,12 @@
     const entry = state.history.find((candidate) => candidate.id === id)
     const turns = Array.isArray(entry?.turns) ? entry.turns.length : 0
     if (turns === 0) {
-      status('that chat has no recorded prompts', 'bad')
+      status(t('status.noRecordedPrompts'), 'bad')
       return
     }
     state.activeHistoryId = id
     renderHistory()
-    status('restoring the chat in every column…')
+    status(t('status.restoringChat'))
     try {
       const response = await api('history/open', {
         method: 'POST',
@@ -813,17 +1171,17 @@
       })
       const payload = await response.json()
       if (payload.ok !== true) {
-        status(payload.error ?? 'could not load that chat', 'bad')
+        status(payload.error ?? t('status.loadChatFailed'), 'bad')
         return
       }
       showHistoryInColumns(payload.value)
       const native = (payload.value.native ?? []).length
       const fallback = (payload.value.fallback ?? []).length
       const missing = Object.values(payload.value.missing ?? {}).filter((list) => list.length > 0).length
-      const parts = [`restored “${payload.value.title}”`]
-      if (native > 0) parts.push(`${native} reopened natively`)
-      if (fallback > 0) parts.push(`${fallback} from captured text`)
-      if (missing > 0) parts.push(`${missing} had no answer`)
+      const parts = [t('status.restored', { title: payload.value.title })]
+      if (native > 0) parts.push(t('status.reopenedNatively', { n: native }))
+      if (fallback > 0) parts.push(t('status.fromCaptured', { n: fallback }))
+      if (missing > 0) parts.push(t('status.hadNoAnswer', { n: missing }))
       status(parts.join(' · '), missing === 0 ? 'ok' : '')
     } catch (error) {
       status(String(error.message ?? error), 'bad')
@@ -860,8 +1218,8 @@
       label.textContent = pane.title
       const note = document.createElement('span')
       note.textContent = answers.length === 0
-        ? ' · no answer recorded'
-        : ` · ${answers.length} ${answers.length === 1 ? 'turn' : 'turns'} from history`
+        ? t('historyView.noAnswer')
+        : t(answers.length === 1 ? 'historyView.turn' : 'historyView.turns', { n: answers.length })
       refs.hvHead.append(label, note)
 
       for (const answer of answers) {
@@ -881,8 +1239,8 @@
         const none = document.createElement('div')
         none.className = 'hv-none'
         none.textContent = missing.length > 0
-          ? 'This model gave no answer for this chat (out of quota, signed out, or still generating).'
-          : 'No answer was stored for this model.'
+          ? t('historyView.gaveNoAnswer')
+          : t('historyView.noStored')
         refs.hvBody.append(none)
       }
 
@@ -911,7 +1269,7 @@
       headers: { 'content-type': 'application/json' },
       body: '{}',
     }).catch(() => {})
-    status('back to the live columns')
+    status(t('status.backLive'))
   }
 
   /** Open a read-only transcript of a stored chat in its own window. */
@@ -922,8 +1280,8 @@
       body: JSON.stringify({ id }),
     }).catch(() => null)
     const result = opened === null ? null : await opened.json().catch(() => null)
-    if (result?.ok === true) status('opened the transcript in its own window', 'ok')
-    else status(result?.error ?? 'could not open that chat', 'bad')
+    if (result?.ok === true) status(t('status.transcriptOpened'), 'ok')
+    else status(result?.error ?? t('status.openChatFailed'), 'bad')
   }
 
   historyToggle.addEventListener('click', () => {
@@ -940,7 +1298,7 @@
     state.startingSession = true
     newSessionButton.disabled = true
     exitHistoryView()
-    status('starting a new session in every column…')
+    status(t('status.newSession'))
     try {
       const response = await api('session/new', {
         method: 'POST',
@@ -949,14 +1307,14 @@
       })
       const payload = await response.json()
       if (payload.ok !== true) {
-        status(payload.error ?? 'could not start a new session', 'bad')
+        status(payload.error ?? t('status.newSessionFailed'), 'bad')
         return
       }
       const failed = Object.entries(payload.value.results).filter(([, value]) => value.ok !== true)
       status(
         failed.length === 0
-          ? 'every column is on a fresh chat'
-          : `${state.panes.size - failed.length}/${state.panes.size} cleared · ${failed.map(([id]) => id).join(', ')} failed`,
+          ? t('status.allCleared')
+          : t('status.clearedPartly', { done: state.panes.size - failed.length, total: state.panes.size, failed: failed.map(([id]) => id).join(', ') }),
         failed.length === 0 ? 'ok' : 'bad',
       )
       state.activeHistoryId = null
@@ -996,10 +1354,22 @@
       const spacer = document.createElement('span')
       spacer.className = 'spacer'
       const reload = document.createElement('button')
-      reload.textContent = 'reload'
-      reload.title = `Reload ${pane.title}`
+      reload.className = 'reload'
+      reload.textContent = t('column.reload')
+      reload.title = t('column.reload.title', { model: pane.title })
       reload.addEventListener('click', () => reloadPane(pane.id))
-      head.append(dot, title, spacer, reload)
+      // Full screen: one column at the width of the window. The Host widens that
+      // provider tab's viewport to match, so the page reflows instead of being a
+      // narrow screenshot stretched over the screen.
+      const fullScreen = document.createElement('button')
+      fullScreen.className = 'full-screen'
+      fullScreen.textContent = t('column.full')
+      fullScreen.title = t('column.full.title', { model: pane.title })
+      fullScreen.addEventListener('click', (event) => {
+        event.stopPropagation()
+        void toggleFullScreen(pane.id)
+      })
+      head.append(dot, title, spacer, reload, fullScreen)
 
       const body = document.createElement('div')
       body.className = 'column-body'
@@ -1007,23 +1377,28 @@
       body.dataset.focus = 'false'
       body.dataset.mode = 'live'
       const img = document.createElement('img')
-      img.alt = `${pane.title} live view`
+      img.alt = t('column.liveView', { model: pane.title })
       img.draggable = false
       const placeholder = document.createElement('div')
       placeholder.className = 'placeholder'
-      placeholder.innerHTML = `<div>${pane.title}</div><div style="font-size:11px">loading the column…</div>`
+      const placeholderTitle = document.createElement('div')
+      placeholderTitle.textContent = pane.title
+      const loadingText = document.createElement('div')
+      loadingText.style.fontSize = '11px'
+      loadingText.textContent = t('column.loading')
+      placeholder.append(placeholderTitle, loadingText)
       const signIn = document.createElement('button')
       signIn.className = 'signin-overlay'
       signIn.type = 'button'
       signIn.hidden = true
-      signIn.textContent = `Sign in to ${pane.title}`
+      signIn.textContent = t('column.signIn', { model: pane.title })
       signIn.addEventListener('click', () => startLogin(pane))
       const loginHint = document.createElement('div')
       loginHint.className = 'login-hint'
       loginHint.hidden = true
       const hint = document.createElement('div')
       hint.className = 'focus-hint'
-      hint.textContent = 'click to interact'
+      hint.textContent = t('column.click')
       // Stored chat rendered in place of the live screenshot.
       const historyView = document.createElement('div')
       historyView.className = 'history-view'
@@ -1036,12 +1411,323 @@
 
       column.append(head, body)
       grid.append(column)
-      columnRefs.set(pane.id, { column, head, body, img, placeholder, dot, signIn, loginHint, historyView, hvHead, hvBody, titleEl: title })
+      columnRefs.set(pane.id, { column, head, body, img, placeholder, dot, signIn, loginHint, historyView, hvHead, hvBody, titleEl: title, fullScreen, reload, hint, loadingText })
 
       wirePointer(pane, body, img)
       wireKeyboard(pane, body)
     }
   }
+
+  /**
+   * One column covering the whole window.
+   *
+   * Clicking the button again restores the five-column view. The provider tab
+   * is resized with the column, so the screenshot is a wide page rendered at
+   * the window size, not a narrow image stretched to fit.
+   */
+  async function toggleFullScreen(paneId) {
+    if (state.expandedPane === paneId) {
+      collapseFullScreen()
+      return
+    }
+    const pane = state.panes.get(paneId)
+    if (pane === undefined) return
+    state.expandedPane = paneId
+    syncExpanded()
+    if (typeof document.documentElement.requestFullscreen === 'function') {
+      // Best effort: the Edge app window may refuse, and the column still covers
+      // the window. Esc leaves the browser's full screen, which collapses this.
+      try {
+        document.documentElement.requestFullscreen().catch(() => {})
+      } catch {
+        /* a refused or unsupported full screen does not block the layout */
+      }
+    }
+    focusPane(paneId)
+    const size = expandedBodySize(paneId)
+    if (size !== null) void sendViewport(pane, size.width, size.height)
+    void pumpFrames()
+  }
+
+  function collapseFullScreen(options = {}) {
+    const paneId = state.expandedPane
+    if (paneId === null) return
+    state.expandedPane = null
+    syncExpanded()
+    if (options.exitFullscreen !== false && document.fullscreenElement !== null) {
+      try {
+        document.exitFullscreen?.().catch(() => {})
+      } catch {
+        /* already out of full screen */
+      }
+    }
+    const pane = state.panes.get(paneId)
+    if (pane !== undefined) void sendViewport(pane, FRAME_W, FRAME_H)
+    void pumpFrames()
+  }
+
+  /** Push the expanded state into the layout and the per-column button labels. */
+  function syncExpanded() {
+    const expanded = state.expandedPane
+    document.body.dataset.expanded = String(expanded !== null)
+    grid.dataset.expanded = String(expanded !== null)
+    for (const [id, refs] of columnRefs) {
+      refs.column.dataset.expanded = String(expanded === id)
+      if (refs.fullScreen !== undefined) {
+        refs.fullScreen.textContent = expanded === id ? t('column.restore') : t('column.full')
+        refs.fullScreen.title = expanded === id ? t('column.restore.title') : t('column.full.title', { model: refs.titleEl.textContent })
+      }
+    }
+  }
+
+  /** The room the expanded column's screenshot has to fill, in CSS pixels. */
+  function expandedBodySize(paneId) {
+    const refs = columnRefs.get(paneId)
+    if (refs === undefined) return null
+    const rect = refs.body.getBoundingClientRect()
+    const width = Math.round(rect.width)
+    const height = Math.round(rect.height)
+    return width > 0 && height > 0 ? { width, height } : null
+  }
+
+  async function sendViewport(pane, width, height) {
+    await api('viewport', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ pane: pane.id, width, height }),
+    }).catch(() => {})
+  }
+
+  // ---------- find in the models' answers ----------
+  // The columns are screenshots of background tabs, so the browser's own find
+  // bar cannot see the models' words. Ctrl+F opens this bar instead; the Host
+  // runs the search inside every provider tab and the matches show up as
+  // highlights in the screenshots.
+  const findBar = document.getElementById('find-bar')
+  const findInput = document.getElementById('find-input')
+  const findCount = document.getElementById('find-count')
+  const findJson = { 'content-type': 'application/json' }
+
+  function openFind() {
+    state.find.open = true
+    findBar.dataset.open = 'true'
+    findInput.focus()
+    findInput.select()
+    if (state.find.query !== '') void runFind(state.find.query)
+  }
+
+  /** Mark the column whose match is active, so a jump is visible even when the
+   *  provider's own scroll barely moves. */
+  function markFindTarget(paneId) {
+    for (const [id, refs] of columnRefs) {
+      refs.column.dataset.find = String(paneId === id)
+    }
+  }
+
+  function resetFindResults() {
+    const find = state.find
+    find.total = 0
+    find.counts = {}
+    find.order = []
+    find.position = -1
+    find.activePane = null
+    find.active = null
+    markFindTarget(null)
+  }
+
+  function closeFind() {
+    if (!state.find.open) return
+    state.find.open = false
+    state.find.searching = false
+    state.find.sequence += 1
+    findBar.dataset.open = 'false'
+    resetFindResults()
+    state.find.pendingStep = 0
+    findCount.textContent = ''
+    findInput.blur()
+    void api('find', { method: 'POST', headers: findJson, body: JSON.stringify({ mode: 'clear' }) }).catch(() => {})
+  }
+
+  function showFindCount() {
+    const find = state.find
+    // A search across five tabs takes a moment; say so instead of showing the
+    // previous result set as if it were the current one.
+    if (find.searching === true && find.total === 0) {
+      findCount.textContent = t('find.searching')
+      return
+    }
+    if (find.total === 0) {
+      findCount.textContent = find.query.trim() === '' ? '' : t('find.noMatches')
+      return
+    }
+    if (find.position < 0) {
+      findCount.textContent = t('find.matches', { n: find.total })
+      return
+    }
+    const pane = state.panes.get(find.activePane)
+    const local = find.active === null ? 0 : find.active.index + 1
+    const localCount = Number(find.counts[find.activePane] ?? 0)
+    findCount.textContent = t('find.position', { column: pane?.title ?? find.activePane, local, localCount, global: find.position + 1, total: find.total })
+  }
+
+  async function runFind(rawQuery) {
+    const find = state.find
+    const query = String(rawQuery ?? '')
+    find.query = query
+    find.timer = null
+    find.sequence += 1
+    const sequence = find.sequence
+    if (query.trim() === '') {
+      find.searching = false
+      find.pendingStep = 0
+      resetFindResults()
+      showFindCount()
+      await api('find', { method: 'POST', headers: findJson, body: JSON.stringify({ mode: 'clear' }) }).catch(() => {})
+      return
+    }
+    find.searching = true
+    resetFindResults()
+    showFindCount()
+    const payload = await api('find', {
+      method: 'POST',
+      headers: findJson,
+      body: JSON.stringify({ mode: 'search', query }),
+    }).then((response) => response.json()).catch(() => null)
+    // A newer keystroke (or a closed bar) wins over this response. A closed bar
+    // must not leave fresh highlights painted in the tabs.
+    if (!find.open || find.sequence !== sequence) {
+      if (!find.open) void api('find', { method: 'POST', headers: findJson, body: JSON.stringify({ mode: 'clear' }) }).catch(() => {})
+      return
+    }
+    find.searching = false
+    const value = payload?.ok === true ? payload.value : null
+    find.total = Number(value?.total ?? 0)
+    find.counts = value?.counts ?? {}
+    // Start with the column the user is reading, then the rest in page order.
+    const ids = PANES.map((pane) => pane.id)
+    const start = ids.indexOf(state.activePane)
+    const ordered = start > 0 ? [...ids.slice(start), ...ids.slice(0, start)] : ids
+    find.order = ordered.filter((id) => Number(find.counts[id] ?? 0) > 0)
+    find.position = -1
+    find.activePane = null
+    find.active = null
+    markFindTarget(null)
+    showFindCount()
+    // Like the browser's own find, land on the first match as soon as the
+    // search completes; a click made while it ran is honoured in this step.
+    if (find.total > 0) {
+      const direction = find.pendingStep !== 0 ? find.pendingStep : 1
+      find.pendingStep = 0
+      await stepFind(direction)
+    }
+  }
+
+  /** Step the global match list: columns in order, each column's matches in turn. */
+  async function stepFind(direction) {
+    const find = state.find
+    if (find.total === 0 || find.order.length === 0) {
+      // The search is still running: remember the click and step once it lands.
+      if (find.searching === true) find.pendingStep = direction
+      return
+    }
+    const offset = (find.position + direction + find.total) % find.total
+    let remaining = offset
+    let target = null
+    let index = 0
+    for (const id of find.order) {
+      const count = Number(find.counts[id] ?? 0)
+      if (remaining < count) {
+        target = id
+        index = remaining
+        break
+      }
+      remaining -= count
+    }
+    if (target === null) return
+    if (find.activePane !== null && find.activePane !== target) {
+      void api('find', { method: 'POST', headers: findJson, body: JSON.stringify({ mode: 'deactivate', pane: find.activePane }) }).catch(() => {})
+    }
+    find.activePane = target
+    find.active = { pane: target, index }
+    find.position = offset
+    markFindTarget(target)
+    showFindCount()
+    await api('find', {
+      method: 'POST',
+      headers: findJson,
+      body: JSON.stringify({ mode: 'activate', pane: target, index }),
+    }).catch(() => {})
+  }
+
+  findInput.addEventListener('input', () => {
+    const find = state.find
+    clearTimeout(find.timer)
+    if (findInput.value !== find.query) {
+      // A search is coming (after the debounce): show that and drop the previous
+      // result set, so "next" cannot step through stale matches.
+      find.searching = true
+      find.pendingStep = 0
+      resetFindResults()
+      showFindCount()
+    }
+    find.timer = setTimeout(() => {
+      void runFind(findInput.value)
+    }, 180)
+  })
+  findInput.addEventListener('keydown', async (event) => {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      clearTimeout(state.find.timer)
+      if (findInput.value !== state.find.query) await runFind(findInput.value)
+      if (state.find.total > 0) await stepFind(event.shiftKey ? -1 : 1)
+      return
+    }
+    if (event.key === 'Escape') closeFind()
+  })
+  document.getElementById('find-prev').addEventListener('click', () => { void stepFind(-1) })
+  document.getElementById('find-next').addEventListener('click', () => { void stepFind(1) })
+  document.getElementById('find-close').addEventListener('click', () => closeFind())
+
+  // Ctrl+F opens the find bar (instead of the browser's own, which searches
+  // this shell page only); Esc closes it before it closes a full-screen column.
+  window.addEventListener('keydown', (event) => {
+    const key = String(event.key ?? '').toLowerCase()
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && key === 'f') {
+      event.preventDefault()
+      event.stopPropagation()
+      openFind()
+      return
+    }
+    if (event.key !== 'Escape') return
+    if (state.find.open) {
+      event.preventDefault()
+      event.stopPropagation()
+      closeFind()
+      return
+    }
+    if (state.expandedPane === null) return
+    event.preventDefault()
+    event.stopPropagation()
+    collapseFullScreen()
+  }, true)
+  document.addEventListener('fullscreenchange', () => {
+    if (document.fullscreenElement === null && state.expandedPane !== null) {
+      collapseFullScreen({ exitFullscreen: false })
+    }
+  })
+  // A resized window while expanded needs a new viewport for that tab.
+  let expandResizeTimer = null
+  window.addEventListener('resize', () => {
+    if (state.expandedPane === null) return
+    clearTimeout(expandResizeTimer)
+    expandResizeTimer = setTimeout(() => {
+      const paneId = state.expandedPane
+      if (paneId === null) return
+      const pane = state.panes.get(paneId)
+      const size = expandedBodySize(paneId)
+      if (pane !== undefined && size !== null) void sendViewport(pane, size.width, size.height)
+    }, 200)
+  })
 
   function updateColumn(pane) {
     const refs = columnRefs.get(pane.id)
@@ -1052,8 +1738,8 @@
     refs.img.style.visibility = hasFrame ? 'visible' : 'hidden'
     refs.placeholder.style.display = hasFrame ? 'none' : 'flex'
     refs.signIn.hidden = pane.status?.loginRequired !== true || pane.signingIn === true
-    if (pane.signingIn === true) refs.signIn.textContent = 'Opening sign-in…'
-    else refs.signIn.textContent = `Sign in to ${pane.title}`
+    if (pane.signingIn === true) refs.signIn.textContent = t('column.openingSignIn')
+    else refs.signIn.textContent = t('column.signIn', { model: pane.title })
     refs.loginHint.hidden = !pane.loginHint
     refs.loginHint.textContent = pane.loginHint ?? ''
   }
@@ -1077,8 +1763,8 @@
     pane.signingIn = false
     const value = payload?.ok === true ? payload.value : null
     pane.loginHint = value?.awaitingInput === true
-      ? `Enter your ${pane.title} email in the column above — this login is saved`
-      : `Sign in to ${pane.title} in the column above — this login is saved`
+      ? t('login.emailHint', { model: pane.title })
+      : t('login.savedHint', { model: pane.title })
     updateColumn(pane)
     void refreshState()
   }
@@ -1094,9 +1780,11 @@
   function wirePointer(pane, body, img) {
     const scale = () => {
       const rect = img.getBoundingClientRect()
+      // Input coordinates are CSS pixels of the emulated viewport, which the
+      // Host may have widened for a full-screen column.
       return {
-        x: FRAME_W / Math.max(1, rect.width),
-        y: FRAME_H / Math.max(1, rect.height),
+        x: (pane.frameW || FRAME_W) / Math.max(1, rect.width),
+        y: (pane.frameH || FRAME_H) / Math.max(1, rect.height),
         left: rect.left,
         top: rect.top,
       }
@@ -1203,6 +1891,14 @@
     return fetch(url, { cache: 'no-store', signal: controller.signal }).finally(() => clearTimeout(timer))
   }
 
+  /** Adopt the emulated viewport size the Host reports with each frame. */
+  function applyFrameSize(pane, response) {
+    const width = Number(response.headers.get('x-frame-width') ?? '')
+    const height = Number(response.headers.get('x-frame-height') ?? '')
+    if (Number.isFinite(width) && width > 0) pane.frameW = width
+    if (Number.isFinite(height) && height > 0) pane.frameH = height
+  }
+
   async function pumpFrames() {
     // Self-heal: a previous tick that never settled must not stop the stream.
     if (frameBusy && Date.now() - frameBusySince < FRAME_TIMEOUT_MS) return
@@ -1210,6 +1906,8 @@
     frameBusySince = Date.now()
     try {
       for (const pane of state.panes.values()) {
+        // Only the expanded column is on screen; the other four need no capture.
+        if (state.expandedPane !== null && pane.id !== state.expandedPane) continue
         // A column rendering captured text has no screenshot to update; a column
         // showing its restored native conversation must keep streaming.
         const refs = columnRefs.get(pane.id)
@@ -1220,8 +1918,12 @@
         } catch {
           continue
         }
-        if (response.status === 304) continue
+        if (response.status === 304) {
+          applyFrameSize(pane, response)
+          continue
+        }
         if (!response.ok) continue
+        applyFrameSize(pane, response)
         const etag = response.headers.get('etag') ?? ''
         const blob = await response.blob()
         if (blob.size === 0) continue
@@ -1258,14 +1960,14 @@
       const response = await api('state')
       const payload = await response.json()
       if (payload.ok !== true) {
-        status(payload.error ?? 'state unavailable', 'bad')
+        status(payload.error ?? t('status.stateUnavailable'), 'bad')
         return
       }
       const value = payload.value
       if (value.running !== true) {
-        statusAmbient(value.error ?? 'Edge window is not running', 'bad')
+        statusAmbient(value.error ?? t('status.edgeClosed'), 'bad')
       } else {
-        statusAmbient(`Edge window is open · port ${value.port}`, 'ok')
+        statusAmbient(t('status.edgeOpen', { port: value.port }), 'ok')
       }
       for (const pane of state.panes.values()) {
         const remote = value.panes.find((candidate) => candidate.id === pane.id)
@@ -1281,7 +1983,7 @@
       }
       renderRail()
     } catch (error) {
-      status(`host unreachable: ${String(error.message ?? error)}`, 'bad')
+      status(t('status.hostUnreachable', { error: String(error.message ?? error) }), 'bad')
     }
   }
 
@@ -1310,7 +2012,7 @@
     exitHistoryView()
     state.sending = true
     sendButton.disabled = true
-    sendStateEl.textContent = 'sending…'
+    sendStateEl.textContent = t('status.sending')
     sendStateEl.dataset.tone = ''
     try {
       if (state.attachments.length > 0) await uploadAttachments()
@@ -1321,7 +2023,7 @@
       })
       const payload = await response.json()
       if (payload.ok !== true) {
-        sendStateEl.textContent = payload.error ?? 'failed'
+        sendStateEl.textContent = payload.error ?? t('status.sendFailed')
         sendStateEl.dataset.tone = 'bad'
         return
       }
@@ -1329,13 +2031,13 @@
       // Count from the actual pane list so adding a column never needs a literal.
       const total = state.panes.size
       if (failed.length === 0) {
-        sendStateEl.textContent = `sent to all ${total}`
+        sendStateEl.textContent = t('status.sentAll', { n: total })
         sendStateEl.dataset.tone = 'ok'
         promptEl.value = ''
         state.attachments = []
         renderAttachments()
       } else {
-        sendStateEl.textContent = `sent to ${total - failed.length}/${total} · ${failed.map(([id]) => id).join(', ')} not ready`
+        sendStateEl.textContent = t('status.sentPartly', { ok: total - failed.length, total, failed: failed.map(([id]) => id).join(', ') })
         sendStateEl.dataset.tone = 'bad'
       }
     } catch (error) {
@@ -1361,7 +2063,7 @@
   function startVoice() {
     const Recognition = window.SpeechRecognition ?? window.webkitSpeechRecognition
     if (!Recognition) {
-      hintEl.textContent = 'voice input is unavailable in this browser'
+      hintEl.textContent = t('status.voiceUnavailable')
       hintEl.dataset.tone = 'bad'
       return
     }
@@ -1378,11 +2080,11 @@
       let transcript = ''
       for (const result of event.results) transcript += result[0].transcript
       promptEl.value = transcript
-      hintEl.textContent = 'listening…'
+      hintEl.textContent = t('status.listening')
       hintEl.dataset.tone = 'ok'
     }
     recognition.onerror = (event) => {
-      hintEl.textContent = `voice input failed: ${event.error}`
+      hintEl.textContent = t('status.voiceFailed', { error: event.error })
       hintEl.dataset.tone = 'bad'
       state.voice = null
       document.getElementById('btn-voice').classList.remove('recording')
@@ -1420,7 +2122,7 @@
     if (state.summarizing) return
     state.summarizing = true
     summarizeButton.disabled = true
-    sendStateEl.textContent = 'summarizing… (this reads all columns and asks a model)'
+    sendStateEl.textContent = t('status.summarizing')
     sendStateEl.dataset.tone = ''
     try {
       const response = await api('summarize', {
@@ -1430,14 +2132,14 @@
       })
       const payload = await response.json()
       if (payload.ok !== true) {
-        sendStateEl.textContent = payload.error ?? 'summary failed'
+        sendStateEl.textContent = payload.error ?? t('status.summaryFailed')
         sendStateEl.dataset.tone = 'bad'
         return
       }
       const value = payload.value
-      const scope = value.source === 'history' ? 'stored chat' : 'live columns'
+      const scope = value.source === 'history' ? t('status.scopeHistory') : t('status.scopeLive')
       const tagged = value.tag === undefined || value.tag === '' ? '' : ` · “${value.tag}”`
-      sendStateEl.textContent = `summary saved${tagged} · ${value.answers} columns from the ${scope}, ${value.differences} differences`
+      sendStateEl.textContent = t('status.summarySaved', { tagged, answers: value.answers, scope, differences: value.differences })
       sendStateEl.dataset.tone = 'ok'
       // The new summary is in the timeline immediately, not on the next poll.
       state.activeSummaryId = value.id ?? null
@@ -1453,28 +2155,28 @@
 
   document.getElementById('btn-reload').addEventListener('click', async () => {
     await api('reload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
-    status('reloading all columns…')
+    status(t('status.reloadingAll'))
     void refreshState()
   })
   document.getElementById('btn-close').addEventListener('click', async () => {
-    status('closing the window…')
+    status(t('status.closing'))
     await api('close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' }).catch(() => {})
     window.close()
   })
   document.getElementById('btn-cookies').addEventListener('click', async () => {
-    status('importing Edge cookies…')
+    status(t('status.importingCookies'))
     const response = await api('cookies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' })
     const payload = await response.json()
     if (payload.ok === true) {
-      status(`imported ${payload.value.applied} cookies for ${payload.value.sites ?? ''} sites`.trim(), 'ok')
+      status(t('status.importedCookies', { n: payload.value.applied, sites: payload.value.sites ?? '' }), 'ok')
     } else if (payload.error === 'cookies-locked') {
       // Edge holds its cookie database open while it runs, so this is expected
       // whenever the user's own Edge is open — not a failure worth alarming over.
-      status('Edge is open, so its cookies are locked. Close Edge and try again, or sign in inside the columns (those logins are saved).', 'bad')
+      status(t('status.cookiesLocked'), 'bad')
     } else if (payload.error === 'cookies-empty') {
-      status('no signed-in provider cookies found in Edge — sign in inside the columns instead', 'bad')
+      status(t('status.cookiesEmpty'), 'bad')
     } else {
-      status(payload.error ?? 'cookie import failed', 'bad')
+      status(payload.error ?? t('status.cookieImportFailed'), 'bad')
     }
   })
 
@@ -1482,11 +2184,81 @@
     await api('reload', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ panes: [id] }) }).catch(() => {})
   }
 
+  // ---------- language ----------
+  const languageSelect = document.getElementById('language-select')
+  let languageTouched = false
+
+  /** Apply the current language to the static page and the rendered UI. */
+  function applyLanguage() {
+    document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en'
+    for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n)
+    for (const el of document.querySelectorAll('[data-i18n-title]')) el.title = t(el.dataset.i18nTitle)
+    for (const el of document.querySelectorAll('[data-i18n-placeholder]')) el.placeholder = t(el.dataset.i18nPlaceholder)
+    applyDynamicLanguage()
+  }
+
+  /** Re-render every list and label that JavaScript built. */
+  function applyDynamicLanguage() {
+    renderRail()
+    renderHistory()
+    renderSummaries()
+    summariesToggle.title = timelineEl.dataset.collapsed === 'true' ? t('summary.expand') : t('summary.collapse')
+    for (const pane of state.panes.values()) updateColumn(pane)
+    for (const [id, refs] of columnRefs) {
+      const expanded = state.expandedPane === id
+      refs.reload.textContent = t('column.reload')
+      refs.reload.title = t('column.reload.title', { model: refs.titleEl.textContent })
+      refs.fullScreen.textContent = expanded ? t('column.restore') : t('column.full')
+      refs.fullScreen.title = expanded ? t('column.restore.title') : t('column.full.title', { model: refs.titleEl.textContent })
+      refs.loadingText.textContent = t('column.loading')
+      refs.hint.textContent = t('column.click')
+      refs.img.alt = t('column.liveView', { model: refs.titleEl.textContent })
+    }
+    if (state.find.open) showFindCount()
+  }
+
+  /**
+   * Switch the interface language.
+   * @param {string} next - 'en' or 'zh'.
+   * @param {{ persist?: boolean }} [options] - false while loading the stored choice.
+   */
+  function setLanguage(next, options = {}) {
+    const value = next === 'zh' ? 'zh' : 'en'
+    const changed = value !== language
+    language = value
+    if (languageSelect !== null) languageSelect.value = language
+    applyLanguage()
+    if (changed && options.persist !== false) {
+      void api('prefs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ language }) }).catch(() => {})
+    }
+  }
+
+  /** Read the stored language once; anything unexpected keeps English. */
+  async function loadPreferences() {
+    const response = await api('prefs').catch(() => null)
+    const payload = response === null ? null : await response.json().catch(() => null)
+    const stored = payload?.ok === true ? payload.value?.language : null
+    if (languageTouched) return
+    if (stored === 'en' || stored === 'zh') setLanguage(stored, { persist: false })
+  }
+
+  if (languageSelect !== null) {
+    languageSelect.addEventListener('change', () => {
+      languageTouched = true
+      setLanguage(languageSelect.value)
+    })
+  }
+
   // ---------- boot ----------
   renderRail()
   renderGrid()
+  applyLanguage()
   for (const pane of state.panes.values()) updateColumn(pane)
+  // A reloaded shell must start in the five-column view: one tab could still be
+  // at the wide full-screen viewport of the page that was just replaced.
+  for (const pane of state.panes.values()) void sendViewport(pane, FRAME_W, FRAME_H)
   focusPane(state.activePane)
+  void loadPreferences()
   void refreshState()
   void refreshHistory()
   void refreshSummaries()

@@ -68,13 +68,18 @@ window.__ModuleLoader__.load({
 .chathub-dot{width:8px;height:8px;border-radius:50%;background:var(--dsw-alias-label-tertiary);flex:none}
 .chathub-dot[data-on="true"]{background:#3ecf8e}
 .chathub-dot[data-tone="bad"]{background:#f0616d}
-.chathub-btn{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary);cursor:pointer}
+.chathub-btn{font:inherit;padding:6px 14px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);cursor:pointer}
 .chathub-btn:hover{background:var(--dsw-alias-interactive-bg-hover)}
-.chathub-btn[data-kind="primary"]{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:var(--dsw-alias-label-on-brand,#fff)}
+.chathub-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:2px}
+/* The theme's "primary fill" is near-white in the dark theme and near-black in
+   the light one, so the label must come from its matching foreground token:
+   pairing it with a fixed white made the button white-on-white in dark mode. */
+.chathub-btn[data-kind="primary"]{background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#111));border-color:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#111));color:var(--dsw-alias-label-primary-foreground,#fff);font-weight:600}
+.chathub-btn[data-kind="primary"]:hover{background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#111)))}
 .chathub-btn:disabled{opacity:.55;cursor:default}
 .chathub-panes{display:flex;gap:8px;flex-wrap:wrap}
 .chathub-chip{border:1px solid var(--dsw-alias-border-l2);border-radius:999px;padding:2px 10px;font-size:12px;color:var(--dsw-alias-label-secondary)}
-.chathub-error{color:var(--dsw-alias-label-error,#f0616d)}
+.chathub-error{color:var(--dsw-alias-state-error-primary,#f0616d)}
 .chathub-hint{font-size:12px;color:var(--dsw-alias-label-tertiary)}
 `
 

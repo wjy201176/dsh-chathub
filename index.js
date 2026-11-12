@@ -7,10 +7,11 @@
  * Claude, DeepSeek and Grok side by side in one window and can type into any of them.
  */
 
+import { readFile } from 'node:fs/promises'
 import { EdgeController } from './lib/edge.js'
 import { importEdgeCookies, describeImport } from './lib/cookies.js'
 import { PROVIDERS } from './lib/providers.js'
-import { renderDigestPage, renderHistoryPage, fallbackDigest } from './lib/summary.js'
+import { renderHistoryPage, fallbackDigest } from './lib/summary.js'
 import {
   fenceRefused,
   methodRefused,
@@ -46,6 +47,13 @@ const DEFAULTS = {
   summaryTimeoutMs: 120000,
   summaryProvider: '',
   summaryModel: '',
+  // The summary report is rendered by answer-me-with-html when its CLI is
+  // installed; "classic" keeps the plain digest page. Saved PDFs go to the
+  // user's Downloads folder unless pdfDir names one.
+  reportRenderer: 'auto',
+  amCli: '',
+  amTimeoutMs: 30000,
+  pdfDir: '',
   // The summary is a comparison table, not an essay. A reasoning model with a
   // big budget can spend all of it thinking and emit no visible text at all.
   summaryMaxTokens: 4000,
@@ -164,6 +172,25 @@ export function apply(ctx, config) {
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await controller.input(await readJsonBody(req)))
           return
+        case '/viewport':
+          if (methodRefused(req, res, ['POST'])) return
+          {
+            const body = await readJsonBody(req)
+            sendJson(res, 200, await controller.setPaneViewport(body?.pane ?? '', body?.width, body?.height))
+          }
+          return
+        case '/find':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await controller.findText(await readJsonBody(req)))
+          return
+        case '/prefs':
+          if (methodRefused(req, res, ['GET', 'HEAD', 'POST'])) return
+          if (req.method === 'POST') {
+            sendJson(res, 200, await controller.setPreferences(await readJsonBody(req)))
+          } else {
+            sendJson(res, 200, controller.getPreferences())
+          }
+          return
         case '/prompt':
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await controller.prompt(await readJsonBody(req)))
@@ -220,6 +247,27 @@ export function apply(ctx, config) {
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await controller.setSummaryTag(await readJsonBody(req)))
           return
+        case '/report/save':
+          if (methodRefused(req, res, ['POST'])) return
+          sendJson(res, 200, await controller.saveReportPdf(new URL(req.url ?? '/', 'http://local').searchParams.get('r') ?? ''))
+          return
+        case '/report/pdf': {
+          if (methodRefused(req, res, ['GET', 'HEAD'])) return
+          const saved = await controller.saveReportPdf(new URL(req.url ?? '/', 'http://local').searchParams.get('r') ?? '')
+          if (saved.ok !== true) {
+            sendJson(res, 404, saved)
+            return
+          }
+          const bytes = await readFile(saved.value.file)
+          res.writeHead(200, {
+            'content-type': 'application/pdf',
+            'content-length': String(bytes.length),
+            'content-disposition': `attachment; filename="${String(saved.value.name).replace(/"/g, '')}"`,
+            'cache-control': 'no-store',
+          })
+          res.end(req.method === 'HEAD' ? undefined : bytes)
+          return
+        }
         case '/attach':
           if (methodRefused(req, res, ['POST'])) return
           sendJson(res, 200, await controller.attach(await readBody(req), req.headers))
@@ -254,8 +302,15 @@ export function apply(ctx, config) {
         sendJson(res, 409, { ok: false, error: 'pane unavailable' })
         return
       }
+      // The emulated viewport is the coordinate space of the forwarded input, so
+      // the shell must map pointer positions against THIS size, not a constant:
+      // a full-screen column resizes it.
+      const viewport = {
+        'x-frame-width': String(frame.width ?? ''),
+        'x-frame-height': String(frame.height ?? ''),
+      }
       if (etag !== '' && etag === frame.etag) {
-        res.writeHead(304, { etag: frame.etag, 'cache-control': 'no-store' })
+        res.writeHead(304, { etag: frame.etag, 'cache-control': 'no-store', ...viewport })
         res.end()
         return
       }
@@ -264,6 +319,7 @@ export function apply(ctx, config) {
         'content-length': String(frame.data.length),
         'cache-control': 'no-store',
         etag: frame.etag,
+        ...viewport,
       })
       res.end(frame.data)
     }
@@ -347,7 +403,7 @@ async function summarize(ctx, controller) {
     links,
   })
 
-  const html = renderDigestPage({
+  const report = await controller.renderSummaryReport({
     digest: result.digest,
     tag: saved.tag,
     answers,
@@ -359,9 +415,9 @@ async function summarize(ctx, controller) {
     reason: result.reason ?? '',
     source,
     links,
-  })
+  }, { summaryId: saved.id })
 
-  const opened = await controller.openReport(html)
+  const opened = await controller.openReport(report.html, { save: true, pageFile: report.pageFile, tag: saved.tag })
   if (opened.ok !== true) return opened
 
   return {
@@ -392,7 +448,7 @@ async function summarize(ctx, controller) {
 async function openSummary(controller, id) {
   const entry = controller.summaries.get(String(id ?? ''))
   if (entry === null) return { ok: false, error: 'unknown-summary' }
-  const html = renderDigestPage({
+  const report = await controller.renderSummaryReport({
     digest: entry.digest,
     tag: entry.tag,
     answers: (entry.titles ?? []).map((title) => ({ title, text: '' })),
@@ -405,8 +461,8 @@ async function openSummary(controller, id) {
     reason: entry.reason ?? '',
     source: entry.source,
     links: entry.links ?? {},
-  })
-  return controller.openReport(html)
+  }, { summaryId: entry.id })
+  return controller.openReport(report.html, { save: true, pageFile: report.pageFile, tag: entry.tag })
 }
 
 /**
